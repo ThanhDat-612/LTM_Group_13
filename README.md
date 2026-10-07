@@ -1,236 +1,134 @@
-# UDM_10 --- Multi-File Upload System
+# UDM_10 — Upload nhiều file
 
-## 1. Thông tin đề tài
+| | |
+|---|---|
+| **Project Code** | UDM_10 |
+| **Tên dự án** | Upload nhiều file |
+| **Nhóm** | `NET_262701303_13` |
+| **Giảng viên** | `Mai Ngọc Châu` |
+| **Video demo** | `<Dán link YouTube Public/Unlisted tại đây>` |
 
--   **Project Code:** UDM_10
--   **Tên đề tài:** Upload nhiều file
--   **Ngôn ngữ:** Python
--   **GUI:** PySide6
--   **Network:** TCP Socket
--   **Mô hình:** Client -- Server
--   **Số thành viên:** 6
--   **Giới hạn upload đồng thời:** 2 file
+## 1. Giới thiệu
 
-## 2. Requirement bắt buộc
+Ứng dụng desktop (không phải Web App) gồm **Client GUI** và **Server**, giao tiếp qua mạng bằng TCP. Người dùng kéo thả một hoặc nhiều file vào GUI để upload lên Server. Mỗi file có trạng thái, tốc độ và tiến trình riêng.
 
--   Kéo thả một hoặc nhiều file vào GUI.
--   Mỗi file có trạng thái riêng: `Waiting`, `Uploading`, `Completed`,
-    `Error`.
--   Hiển thị progress riêng cho từng file.
--   Hiển thị tốc độ upload riêng cho từng file.
--   Có queue hoặc upload đồng thời.
--   Công bố giới hạn số file upload đồng thời: **2**.
--   Một file lỗi không được làm dừng các file còn lại.
--   Server có quy tắc xử lý file rõ ràng.
--   Không cần Pause/Resume vì thuộc UDM_12.
+## 2. Chức năng
 
-## 3. Công nghệ
+- Kéo thả một hoặc nhiều file vào khu vực upload.
+- Mỗi file có trạng thái riêng: **Chờ / Đang tải / Hoàn tất / Lỗi**.
+- Hiển thị tốc độ và tiến trình upload cho từng file.
+- Upload hàng đợi hoặc đồng thời, giới hạn tối đa **N file cùng lúc** (mặc định `N = 3`, chỉnh trong cấu hình).
+- Lỗi của một file không làm dừng các file còn lại.
+- Quy tắc trùng tên trên Server: tự động đổi tên theo ngày giờ `ten_file 2300-10072026.ext`, `ten_file 2315-11072026.ext`, ...
+- Server kiểm tra dữ liệu từ Client, trả về lỗi rõ ràng khi dữ liệu không hợp lệ.
+- Server ghi log: thời gian, kết nối, ngắt kết nối, lỗi, thao tác chính.
+- GUI luôn hiển thị trạng thái kết nối và không bị treo khi upload.
 
-### Client
+## 3. Kiến trúc
 
--   Python 3.x
--   PySide6
--   socket
--   threading / ThreadPoolExecutor
--   pathlib
--   time
+- Mô hình: **Client–Server (TCP)**.
+- Client và Server là hai tiến trình riêng, có thể chạy cùng máy hoặc khác máy.
+- Mỗi file được upload qua một luồng/kết nối riêng để lỗi không lan sang file khác.
+- File được ghi tạm dưới dạng `.part` trên Server, chỉ đổi tên thành file chính thức khi nhận đủ dữ liệu và kiểm tra hợp lệ.
 
-### Server
-
--   Python 3.x
--   socket
--   threading
--   pathlib
--   logging
-
-### Quản lý mã nguồn
-
--   Git + GitHub
--   Mỗi thành viên làm branch riêng.
--   Không commit trực tiếp vào `main`.
-
-## 4. Kiến trúc
-
-``` text
-                         TCP Socket
-┌─────────────────────┐              ┌──────────────────────┐
-│       CLIENT        │              │        SERVER        │
-│                     │              │                      │
-│     PySide6 GUI     │              │    TCP Listener      │
-│         │           │              │          │           │
-│         ▼           │              │          ▼           │
-│   Upload Manager    │─────────────►│    Client Handler    │
-│         │           │              │          │           │
-│         ▼           │              │          ▼           │
-│  Upload Task x N    │              │   File Receiver      │
-│         │           │              │          │           │
-│         ▼           │              │          ▼           │
-│ TCP Client/Socket   │              │    File Manager      │
-└─────────────────────┘              │          │           │
-                                     │          ▼           │
-                                     │      uploads/         │
-                                     └──────────────────────┘
+```
++-----------+      TCP (IP:port cấu hình)      +-----------+
+|  Client   | --------------------------------> |  Server   |
+|  (GUI)    | <-------------------------------- | (threads) |
++-----------+       message + dữ liệu file      +-----------+
+                                                      |
+                                                 uploads/  +  logs/
 ```
 
-## 5. Bố cục thư mục
+## 4. Giao thức (tóm tắt)
 
-``` text
-LTM/
-│
-├── CODE/
-│   ├── client/
-│   ├── server/
-│   ├── storage/
-│   └── tests/
-│
-├── DOCS/
-│   ├── Report.docx
-│   ├── System_Design.md
-│   ├── Protocol.md
-│   ├── Test_Plan.md
-│   ├── Test_Results.md
-│   └── User_Guide.md
-│
-├── EXTRA/
-│   ├── sample_files/
-│   ├── screenshots/
-│   └── other_resources/
-│
-├── PPTX/
-│   └── Presentation.pptx
-│
-└── README_UDM10.md
+> Chi tiết đầy đủ nằm trong báo cáo (thư mục `DOCX`).
+
+| Bước | Hướng | Message | Nội dung chính |
+|---|---|---|---|
+| 1 | C → S | `UPLOAD_REQ` | tên file, kích thước, checksum |
+| 2 | S → C | `UPLOAD_ACK` / `ERROR` | chấp nhận hoặc từ chối, tên file cuối cùng trên Server |
+| 3 | C → S | `DATA` | các khối dữ liệu (chunk) |
+| 4 | C → S | `UPLOAD_DONE` | báo kết thúc |
+| 5 | S → C | `RESULT` | thành công hoặc mã lỗi |
+
+- **Port mặc định:** `<ví dụ 5000>`
+- **Mã lỗi:** `<liệt kê: tên file không hợp lệ, vượt dung lượng, dữ liệu sai, ...>`
+
+## 5. Cấu hình
+
+IP, port và các tham số không hard-code. Chỉnh trong file `Code/config.json`:
+
+```json
+{
+  "server_host": "127.0.0.1",
+  "server_port": 5000,
+  "max_concurrent_uploads": 3,
+  "chunk_size": 65536,
+  "timeout_seconds": 30,
+  "upload_dir": "uploads",
+  "max_file_size_mb": 500
+}
 ```
 
-## 6. Protocol TCP
+## 6. Yêu cầu môi trường
 
-Nhóm phải thống nhất protocol trước khi code Client và Server.
+- `<Python 3.10+>` 
+- Thư viện: `<PyQt6 / tkinterdnd2 / ...>` — cài bằng `pip install -r requirements.txt`
 
-Luồng cơ bản:
+## 7. Hướng dẫn chạy
 
-``` text
-Client
-  │
-  ├── HEADER
-  │     ├── Command = UPLOAD
-  │     ├── Filename
-  │     └── File size
-  │
-  ├── FILE DATA
-  │     ├── Chunk 1
-  │     ├── Chunk 2
-  │     └── ...
-  │
-  └── END
-        │
-        ▼
-      Server
+**Chạy Server:**
+
+```bash
+cd Code
+python server.py
 ```
 
-File nên được đọc/gửi theo chunk, ví dụ **64 KB**, không đọc toàn bộ
-file vào RAM.
+**Chạy Client (cùng máy hoặc máy khác):**
 
-## 7. Quy tắc Server
-
-Nếu file trùng tên, không ghi đè.
-
-Ví dụ:
-
-``` text
-report.pdf
-report (1).pdf
-report (2).pdf
+```bash
+cd Code
+python client.py
 ```
 
-Server chỉ được ghi file vào thư mục `storage/uploads/`.
+Nếu chạy khác máy, sửa `server_host` trong `config.json` thành IP của máy chạy Server.
 
-## 8. Phân công 6 thành viên
+## 8. Cấu trúc thư mục
 
-### TV1 --- Team Lead / Architecture / Integration
+```
+UDM_10/
+├── Code/        # Mã nguồn Client và Server
+├── DOCX/        # Báo cáo (Word)
+├── Extra/       # Ảnh, video, bằng chứng kiểm thử, thông tin bổ sung
+├── PPTX/        # Slide thuyết trình
+└── ReadMe.md
+```
 
--   Phân tích requirement.
--   Chốt kiến trúc.
--   Chốt TCP protocol.
--   Quản lý GitHub.
--   Review Pull Request.
--   Tích hợp code.
--   Chuẩn bị demo tổng thể.
+## 9. Kiểm thử
 
-### TV2 --- TCP Server
+- Functional test cho toàn bộ chức năng bắt buộc.
+- Test dữ liệu không hợp lệ (tên file sai, header lỗi, kích thước không khớp).
+- Test ngắt kết nối đột ngột (Client hoặc Server).
+- Stress và performance test với ít nhất hai mức tải khác nhau.
+- Chỉ số đo: thời gian phản hồi, độ trễ, throughput, MB/giây, tỷ lệ lỗi, CPU, RAM.
 
--   `server/main.py`
--   TCP Listener.
--   Accept Client.
--   `client_handler.py`.
--   Multi-client connection.
--   Disconnect/error handling.
+Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm trong báo cáo và thư mục `Extra`.
 
-### TV3 --- File Receiver / File Manager
+## 10. Phân công
 
--   `file_receiver.py`
--   `file_manager.py`
--   Nhận binary data.
--   Ghi file theo chunk.
--   Tạo storage.
--   Xử lý file trùng tên.
--   Xử lý lỗi file.
+| STT | Họ tên | MSSV | Vai trò | Công việc |
+|---|---|---|---|---|
+| 1 | `<Trương Thành Đạt>` | `<079206016971>` | Leader | Kiến trúc, protocol, tích hợp, README |
+| 2 | `<>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
+| 3 | `<>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
+| 4 | `<>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
+| 5 | `<>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
+| 6 | `<>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
 
-### TV4 --- Client Networking / Upload Manager
+## 11. Tài liệu
 
--   `tcp_client.py`
--   `upload_service.py`
--   `upload_manager.py`
--   Gửi header và file.
--   Queue.
--   Giới hạn 2 upload đồng thời.
--   Progress.
--   Speed.
--   Một file lỗi không làm file khác dừng.
+Document: https://docs.google.com/document/d/11_C4RPUITftiI3TEqs5c_iWzwgcEilVlQYWL_E85cD8/edit?usp=sharing
 
-### TV5 --- GUI / PySide6
-
--   `main_window.py`
--   Drag & Drop.
--   Chọn nhiều file.
--   Danh sách file.
--   Progress bar.
--   Speed.
--   Status.
--   Server connection status.
-
-### TV6 --- Testing / Documentation / Demo
-
--   Thiết kế Test Case.
--   Chạy test.
--   Ghi Test Result.
--   Tạo file test.
--   Test lỗi mạng.
--   Test nhiều file.
--   Test concurrency.
--   Viết tài liệu.
--   Chuẩn bị slide và kịch bản demo.
-
-**Tất cả thành viên vẫn phải test và review phần của mình.**
-
-## 9. DOC nếu cần
-
-Đề cương:
-
-1.  Giới thiệu đề tài.
-2.  Requirement.
-3.  Công nghệ sử dụng.
-4.  Kiến trúc Client--Server.
-5.  Thiết kế TCP protocol.
-6.  Thiết kế Client.
-7.  Thiết kế Server.
-8.  Cơ chế queue/concurrent upload.
-9.  Progress và speed.
-10. Error handling.
-11. Test Case và kết quả.
-12. Screenshot giao diện.
-13. Kết quả đạt được.
-14. Hạn chế.
-15. Hướng phát triển.
-16. Phân công thành viên.
-
-## 10. Test Case
+Tiến độ: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?usp=sharing
+Testcase: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?gid=603698804#gid=603698804
