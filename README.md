@@ -120,15 +120,16 @@ Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm 
 | STT | Họ tên | MSSV | Vai trò | Công việc |
 |---|---|---|---|---|
 | 1 | `<Trương Thành Đạt>` | `<079206016971>` | Leader | Kiến trúc, protocol, tích hợp, README |
-| 2 | `<>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
-| 3 | `<>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
-| 4 | `<>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
-| 5 | `<>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
-| 6 | `<>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
+| 2 | `<Nguyễn Hoàng An>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
+| 3 | `<Trần Nguyễn Du>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
+| 4 | `<Sử Quốc Duy>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
+| 5 | `<Trần Minh Tuyển>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
+| 6 | `<Huỳnh Khánh Vân>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
 
 ## 11. Tài liệu
 
 Document: https://docs.google.com/document/d/11_C4RPUITftiI3TEqs5c_iWzwgcEilVlQYWL_E85cD8/edit?usp=sharing
 
 Tiến độ: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?usp=sharing
+
 Testcase: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?gid=603698804#gid=603698804
