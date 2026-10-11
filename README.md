@@ -122,7 +122,7 @@ Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm 
 | 1 | `<Trương Thành Đạt>` | `<079206016971>` | Leader | Kiến trúc, protocol, tích hợp, README |
 | 2 | `<>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
 | 3 | `<>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
-| 4 | `<>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
+| 4 | `<Sử Quốc Duy>`      | `<056206005633>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
 | 5 | `<>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
 | 6 | `<>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
 
