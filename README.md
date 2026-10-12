@@ -120,7 +120,7 @@ Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm 
 | STT | Họ tên | MSSV | Vai trò | Công việc |
 |---|---|---|---|---|
 | 1 | `<Trương Thành Đạt>` | `<079206016971>` | Leader | Kiến trúc, protocol, tích hợp, README |
-| 2 | `<Nguyễn Hoàng An>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
+| 2 | `<Nguyễn Hoàng An>` | `<056206010568>` | Server core | Nhận file, .part, xử lý trùng tên |
 | 3 | `<Trần Nguyễn Du>` | `<080206009191>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
 | 4 | `<Sử Quốc Duy>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
 | 5 | `<Trần Minh Tuyển>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
