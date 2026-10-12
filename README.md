@@ -123,7 +123,7 @@ Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm 
 | 2 | `<>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
 | 3 | `<>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
 | 4 | `<>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
-| 5 | `<>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
+| 5 | `<Trần Minh Tuyển>` | `<056206005060>` | Client GUI | Kéo thả, trạng thái, tiến trình |
 | 6 | `<>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
 
 ## 11. Tài liệu
