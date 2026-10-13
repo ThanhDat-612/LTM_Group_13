@@ -1,1 +1,1 @@
-print('hello i am server')
+print('hello welcome to the server')
