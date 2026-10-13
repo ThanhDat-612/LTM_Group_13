@@ -124,7 +124,7 @@ Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm 
 | 3 | `<>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
 | 4 | `<>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
 | 5 | `<>` | `<MSSV>` | Client GUI | Kéo thả, trạng thái, tiến trình |
-| 6 | `<>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
+| 6 | `<Huỳnh Khánh Vân>` | `<072305001573>` | QA, demo, slide | Kiểm thử, video, PPTX |
 
 ## 11. Tài liệu
 
