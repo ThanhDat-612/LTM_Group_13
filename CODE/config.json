@@ -1,0 +1,9 @@
+{
+  "server_host": "127.0.0.1",
+  "server_port": 5000,
+  "max_concurrent_uploads": 3,
+  "chunk_size": 65536,
+  "timeout_seconds": 30,
+  "upload_dir": "uploads",
+  "max_file_size_mb": 500
+}

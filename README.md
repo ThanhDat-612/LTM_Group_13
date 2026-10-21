@@ -70,42 +70,86 @@ IP, port và các tham số không hard-code. Chỉnh trong file `Code/config.js
   "max_file_size_mb": 500
 }
 ```
+## 6. Cấu trúc dự án
 
-## 6. Yêu cầu môi trường
-
-- `<Python 3.10+>` 
-- Thư viện: `<PyQt6 / tkinterdnd2 / ...>` — cài bằng `pip install -r requirements.txt`
-
-## 7. Hướng dẫn chạy
-
-**Chạy Server:**
+```
+udm10-multi-upload/
+├── README.md
+├── requirements.txt
+├── config.json                # Cấu hình chung: host, port, max file, timeout...
+│
+├── docs/
+│   ├── PROTOCOL.md            # Giao thức client <-> server
+│   ├── ARCHITECTURE.md        # Kiến trúc, luồng upload
+│   └── LIMITS.md              # Giới hạn số file upload đồng thời
+│
+├── common/                    # Code dùng chung 2 phía
+│   ├── protocol.py            # Định nghĩa message, mã lệnh, mã lỗi
+│   ├── constants.py           # Hằng số: chunk size, port, trạng thái file
+│   └── utils.py               # Hàm tiện ích
+│
+├── server/
+│   ├── main.py                # Khởi chạy server (GUI, hoặc --headless)
+│   ├── server.py              # Lắng nghe kết nối, mỗi client/file một luồng
+│   ├── upload_handler.py      # Nhận dữ liệu từng file, ghi vào .part
+│   ├── part_manager.py        # Tạo/đổi tên/xoá file .part
+│   ├── duplicate_policy.py    # Quy tắc xử lý trùng tên
+│   ├── validator.py           # Kiểm tra tên file, kích thước, dữ liệu
+│   ├── security.py            # Chống path traversal, giới hạn kết nối
+│   ├── logger.py              # Ghi log ra file và đẩy sang GUI
+│   ├── config_loader.py       # Đọc và kiểm tra config.json
+│   ├── events.py              # Cầu nối server core <-> GUI (queue sự kiện)
+│   ├── gui/                   # Giao diện server
+│   │   ├── server_window.py   #   Cửa sổ chính, Start/Stop
+│   │   ├── clients_view.py    #   Danh sách client đang kết nối
+│   │   ├── uploads_view.py    #   File đang nhận: %, tốc độ, trạng thái
+│   │   ├── log_view.py        #   Log realtime
+│   │   ├── settings_panel.py  #   Chỉnh port, thư mục lưu, giới hạn
+│   │   └── styles.py
+│   ├── storage/
+│   │   ├── uploads/           #   File hoàn tất
+│   │   └── tmp/               #   File .part đang nhận
+│   └── logs/
+│
+├── client/
+│   ├── main.py                # Khởi chạy client
+│   ├── models.py              # FileItem, enum trạng thái
+│   ├── network/
+│   │   ├── upload_manager.py  #   Điều phối hàng đợi và số file đồng thời
+│   │   ├── upload_queue.py    #   Hàng đợi file chờ
+│   │   ├── upload_worker.py   #   Luồng gửi 1 file
+│   │   ├── speed_tracker.py   #   Tốc độ và % tiến trình
+│   │   └── connection.py      #   Socket, timeout
+│   └── gui/
+│       ├── main_window.py
+│       ├── drop_area.py       #   Khu vực kéo thả
+│       ├── file_list_view.py  #   Danh sách file + trạng thái
+│       ├── progress_item.py   #   Thanh tiến trình từng file
+│       └── styles.py
+│
+├── tests/                     # Kiểm thử
+│   ├── test_protocol.py
+│   ├── test_duplicate.py
+│   ├── test_validator.py
+│   ├── test_concurrent.py
+│   └── sample_files/
+```
+## 7. Cách chạy
 
 ```bash
-cd Code
-python server.py
+pip install -r requirements.txt
+
+# Server (có GUI)
+python -m server.main
+
+# Server không GUI (dùng khi test tự động)
+python -m server.main --headless
+
+# Client
+python -m client.main
 ```
 
-**Chạy Client (cùng máy hoặc máy khác):**
-
-```bash
-cd Code
-python client.py
-```
-
-Nếu chạy khác máy, sửa `server_host` trong `config.json` thành IP của máy chạy Server.
-
-## 8. Cấu trúc thư mục
-
-```
-UDM_10/
-├── Code/        # Mã nguồn Client và Server
-├── DOCX/        # Báo cáo (Word)
-├── Extra/       # Ảnh, video, bằng chứng kiểm thử, thông tin bổ sung
-├── PPTX/        # Slide thuyết trình
-└── ReadMe.md
-```
-
-## 9. Kiểm thử
+## 8. Kiểm thử
 
 - Functional test cho toàn bộ chức năng bắt buộc.
 - Test dữ liệu không hợp lệ (tên file sai, header lỗi, kích thước không khớp).
@@ -115,20 +159,21 @@ UDM_10/
 
 Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm trong báo cáo và thư mục `Extra`.
 
-## 10. Phân công
+## 9. Phân công
 
 | STT | Họ tên | MSSV | Vai trò | Công việc |
 |---|---|---|---|---|
 | 1 | `<Trương Thành Đạt>` | `<079206016971>` | Leader | Kiến trúc, protocol, tích hợp, README |
-| 2 | `<>` | `<MSSV>` | Server core | Nhận file, .part, xử lý trùng tên |
-| 3 | `<>` | `<MSSV>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
-| 4 | `<>` | `<MSSV>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
-| 5 | `<Trần Minh Tuyển>` | `<056206005060>` | Client GUI | Kéo thả, trạng thái, tiến trình |
-| 6 | `<>` | `<MSSV>` | QA, demo, slide | Kiểm thử, video, PPTX |
+| 2 | `<Nguyễn Hoàng An>` | `<056206010568>` | Server core | Nhận file, .part, xử lý trùng tên |
+| 3 | `<Trần Nguyễn Du>` | `<080206009191>` | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
+| 4 | `<Sử Quốc Duy>` | `<056206005633>` | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
+| 5 | `<Trần Minh Tuyền>` | `<056206005060>` | Client GUI | Kéo thả, trạng thái, tiến trình |
+| 6 | `<Huỳnh Khánh Vân>` | `<072305001573>` | QA, demo, slide | Kiểm thử, video, PPTX |
 
 ## 11. Tài liệu
 
 Document: https://docs.google.com/document/d/11_C4RPUITftiI3TEqs5c_iWzwgcEilVlQYWL_E85cD8/edit?usp=sharing
 
 Tiến độ: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?usp=sharing
+
 Testcase: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?gid=603698804#gid=603698804
