@@ -1,10 +1,7 @@
-<<<<<<< Updated upstream
-=======
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk
 
 from client.network.connection import check_connection
-
 
 class FileTransferApp:
 
@@ -56,4 +53,5 @@ class FileTransferApp:
                 self.status.set(f"Không thể kết nối đến {host}:{port}")
         except OSError:
             self.status.set(f"Không thể kết nối đến {host}:{port}")
->>>>>>> Stashed changes
+
+

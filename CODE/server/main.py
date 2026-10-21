@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-print('hello world')
-=======
 import sys
 from pathlib import Path
 
@@ -9,7 +6,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from server.server import Server
-
 
 def main():
     print("=== Đang khởi động Server LTM Group 13 ===")
@@ -26,4 +22,5 @@ def main():
 
 if __name__ == "__main__":
     main()
->>>>>>> Stashed changes
+
+

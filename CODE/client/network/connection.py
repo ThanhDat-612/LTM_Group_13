@@ -1,7 +1,4 @@
-<<<<<<< Updated upstream
-=======
 import socket
-
 
 def check_connection(host, port, timeout=30):
     """Kiểm tra kết nối TCP đến server."""
@@ -10,4 +7,5 @@ def check_connection(host, port, timeout=30):
         return True
 
     return False
->>>>>>> Stashed changes
+
+

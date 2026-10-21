@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-print('hello welcome to the server')
-=======
 import socket
 import threading
 import json
@@ -101,4 +98,4 @@ class Server:
             print("[SERVER STOPPED] Server đã dừng hoạt động thành công.")
         except Exception as e:
             print(f"[ERROR] Lỗi khi đóng socket server: {e}")
->>>>>>> Stashed changes
+
