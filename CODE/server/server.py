@@ -2,26 +2,48 @@ import socket
 import threading
 import json
 import os
+from pathlib import Path
 from server.upload_handler import UploadHandler
 
 class Server:
     def __init__(self, config_path="config.json"):
-        self.load_config(config_path)
+        self._config_path = self._resolve_config_path(config_path)
+        self.load_config(self._config_path)
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # Cho phép tái sử dụng cổng ngay sau khi tắt server
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.is_running = False
 
+    def _resolve_config_path(self, config_path):
+        path = Path(config_path)
+        if path.is_absolute():
+            return path
+
+        candidates = [
+            Path(__file__).resolve().parent.parent / path,
+            Path.cwd() / path,
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+        return candidates[0]
+
     def load_config(self, config_path):
-        """Đọc file cấu hình chung host và port"""
-        if os.path.exists(config_path):
+        """Đọc file cấu hình chung host và port theo cấu trúc project"""
+        defaults = {
+            "host": "127.0.0.1",
+            "port": 5000,
+        }
+
+        config_path = Path(config_path)
+        if config_path.exists():
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-                self.host = config.get("host", "127.0.0.1")
-                self.port = config.get("port", 8888)
         else:
-            self.host = "127.0.0.1"
-            self.port = 8888
+            config = {}
+
+        self.host = config.get("server_host", config.get("host", defaults["host"]))
+        self.port = config.get("server_port", config.get("port", defaults["port"]))
 
     def start(self):
         """Khởi chạy server, bind cổng và lắng nghe kết nối liên tục[cite: 1]"""
@@ -76,3 +98,4 @@ class Server:
             print("[SERVER STOPPED] Server đã dừng hoạt động thành công.")
         except Exception as e:
             print(f"[ERROR] Lỗi khi đóng socket server: {e}")
+

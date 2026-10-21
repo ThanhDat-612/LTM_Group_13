@@ -1,9 +1,10 @@
-﻿import tkinter as tk
+import tkinter as tk
 from tkinter import ttk
 
+from client.network.connection import check_connection
 
 class FileTransferApp:
-    
+
     def __init__(self, root):
         self.host = tk.StringVar(value="127.0.0.1")
         self.port = tk.StringVar(value="5000")
@@ -32,5 +33,25 @@ class FileTransferApp:
         self.host_entry.focus_set()
 
     def connect(self):
-        # Sẽ bổ sung xử lý kết nối sau.
-        pass
+        host = self.host.get().strip()
+        port_text = self.port.get().strip()
+
+        if not host:
+            self.status.set("IP không được để trống")
+            return
+
+        try:
+            port = int(port_text)
+        except ValueError:
+            self.status.set("Port phải là số nguyên")
+            return
+
+        try:
+            if check_connection(host, port, timeout=3):
+                self.status.set(f"Đã kết nối đến {host}:{port}")
+            else:
+                self.status.set(f"Không thể kết nối đến {host}:{port}")
+        except OSError:
+            self.status.set(f"Không thể kết nối đến {host}:{port}")
+
+

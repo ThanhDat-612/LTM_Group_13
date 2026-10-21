@@ -1,16 +1,18 @@
 import sys
-import os
+from pathlib import Path
 
-# Đảm bảo Python nhận diện đường dẫn thư mục gốc
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from server.server import Server
 
 def main():
     print("=== Đang khởi động Server LTM Group 13 ===")
-    
+
     # Khởi tạo và chạy server
-    server = Server(config_path="config.json")
+    config_path = ROOT / "config.json"
+    server = Server(config_path=str(config_path))
     
     try:
         server.start()
@@ -20,3 +22,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
