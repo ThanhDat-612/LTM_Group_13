@@ -1,0 +1,12 @@
+=== Phiên server bắt đầu lúc 2026-10-25 21:17:47 ===
+[2026-10-25 21:17:47] Server đã bắt đầu lắng nghe trên 127.0.0.1:5000
+[2026-10-25 21:17:48] Thư mục lưu tệp: D:\Workplace\LTM\CODE\uploads
+[2026-10-25 21:17:48] Dung lượng tối đa mỗi tệp: 500 MB
+[2026-10-25 21:17:48] Cảnh báo cấu hình: Khoá không dùng trong config.json: "max_concurrent_uploads"
+[2026-10-25 21:17:48] Cảnh báo cấu hình: Khoá không dùng trong config.json: "chunk_size"
+[2026-10-25 21:17:48] Cảnh báo cấu hình: Khoá không dùng trong config.json: "timeout_seconds"
+[2026-10-25 21:17:48] Tệp log phiên này: D:\Workplace\LTM\CODE\server\logs\server_20261025_211747.log
+[2026-10-25 21:18:03] Client 127.0.0.1:62664 đã kết nối
+[2026-10-25 21:18:04] Client 127.0.0.1:62664 đã ngắt kết nối
+[2026-10-25 21:18:23] Server đã dừng hoạt động
+=== Phiên server kết thúc lúc 2026-10-25 21:18:23 ===
