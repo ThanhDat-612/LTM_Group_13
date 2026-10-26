@@ -1,0 +1,120 @@
+"""
+Centralized server logging for LTM Group 13.
+
+Logs are written to both the console and a file in logs/server.log.
+"""
+
+from __future__ import annotations
+
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Optional
+
+
+_LOGGER_NAME = "ltm_group_13.server"
+_configured = False
+
+
+def setup_logger(
+    log_dir: str | Path = "logs",
+    level: int = logging.INFO,
+    filename: str = "server.log",
+) -> logging.Logger:
+    """Create/configure the project logger. Safe to call more than once."""
+    global _configured
+
+    logger = logging.getLogger(_LOGGER_NAME)
+    logger.setLevel(level)
+    logger.propagate = False
+
+    if _configured or logger.handlers:
+        _configured = True
+        return logger
+
+    log_path = Path(log_dir)
+    log_path.mkdir(parents=True, exist_ok=True)
+
+    formatter = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    file_handler = RotatingFileHandler(
+        log_path / filename,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(level)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(level)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+
+    _configured = True
+    return logger
+
+
+def get_logger() -> logging.Logger:
+    """Return the project logger, configuring it with default settings if needed."""
+    return setup_logger()
+
+
+logger = setup_logger()
+
+
+def info(message: str) -> None:
+    logger.info(message)
+
+
+def warning(message: str) -> None:
+    logger.warning(message)
+
+
+def error(message: str) -> None:
+    logger.error(message)
+
+
+def debug(message: str) -> None:
+    logger.debug(message)
+
+
+def exception(message: str) -> None:
+    logger.exception(message)
+
+
+def log_client_connected(address) -> None:
+    info(f"Client connected: {address}")
+
+
+def log_client_disconnected(address) -> None:
+    info(f"Client disconnected: {address}")
+
+
+def log_upload_started(address, filename: str, size: Optional[int] = None) -> None:
+    extra = f", size={size} bytes" if size is not None else ""
+    info(f"Upload started: client={address}, filename={filename!r}{extra}")
+
+
+def log_upload_completed(address, filename: str) -> None:
+    info(f"Upload completed: client={address}, filename={filename!r}")
+
+
+def log_validation_failed(address, filename: str, code: str, message: str) -> None:
+    warning(
+        f"Validation failed: client={address}, filename={filename!r}, "
+        f"code={code}, message={message}"
+    )
+
+
+def log_security_event(address, message: str) -> None:
+    warning(f"Security event: client={address}, {message}")
+
+
+def log_error(address, message: str) -> None:
+    error(f"Client error: client={address}, {message}")
