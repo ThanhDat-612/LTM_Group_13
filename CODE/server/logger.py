@@ -1,120 +1,83 @@
+"""Ghi nhật ký hoạt động của server ra tệp.
+
+Mỗi lần BẬT server tạo một tệp log mới (server_YYYYMMDD_HHMMSS.log) trong thư mục log,
+ghi liên tục cho tới khi TẮT server rồi đóng tệp. Mỗi dòng được ghi xuống đĩa ngay nên
+nếu chương trình bị tắt đột ngột thì vẫn không mất log.
 """
-Centralized server logging for LTM Group 13.
-
-Logs are written to both the console and a file in logs/server.log.
-"""
-
-from __future__ import annotations
-
-import logging
-from logging.handlers import RotatingFileHandler
+import threading
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 
-_LOGGER_NAME = "ltm_group_13.server"
-_configured = False
+class SessionLogger:
+    def __init__(self, log_dir, max_files=30):
+        self.log_dir = Path(log_dir)
+        self.max_files = max_files
+        self.path = None
+        self.last_error = None
+        self._file = None
+        self._lock = threading.Lock()
 
+    @property
+    def active(self):
+        return self._file is not None
 
-def setup_logger(
-    log_dir: str | Path = "logs",
-    level: int = logging.INFO,
-    filename: str = "server.log",
-) -> logging.Logger:
-    """Create/configure the project logger. Safe to call more than once."""
-    global _configured
+    def start(self, header=""):
+        """Tạo tệp log cho phiên mới. Trả về đường dẫn; ném OSError nếu không tạo được."""
+        with self._lock:
+            self._close_locked()
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            self._prune_locked()
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            n = 0
+            while True:
+                name = f"server_{stamp}.log" if n == 0 else f"server_{stamp}_{n}.log"
+                try:
+                    self._file = open(self.log_dir / name, "x", encoding="utf-8", buffering=1)  # ghi từng dòng
+                    break
+                except FileExistsError:
+                    n += 1   # bật lại trong cùng một giây
+            self.path = self.log_dir / name
+            self.last_error = None
+            if header:
+                self._write_locked(header)
+            return self.path
 
-    logger = logging.getLogger(_LOGGER_NAME)
-    logger.setLevel(level)
-    logger.propagate = False
+    def write(self, line):
+        with self._lock:
+            self._write_locked(line)
 
-    if _configured or logger.handlers:
-        _configured = True
-        return logger
+    def stop(self, footer=""):
+        with self._lock:
+            if footer:
+                self._write_locked(footer)
+            self._close_locked()
 
-    log_path = Path(log_dir)
-    log_path.mkdir(parents=True, exist_ok=True)
+    # ---- nội bộ ----
+    def _write_locked(self, line):
+        if self._file is None:
+            return
+        try:
+            self._file.write(line + "\n")
+        except OSError as exc:   # đầy đĩa, mất quyền ghi... -> không để làm sập server
+            self.last_error = str(exc)
+            self._close_locked()
 
-    formatter = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    def _close_locked(self):
+        if self._file is not None:
+            try:
+                self._file.close()
+            except OSError:
+                pass
+            self._file = None
 
-    file_handler = RotatingFileHandler(
-        log_path / filename,
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3,
-        encoding="utf-8",
-    )
-    file_handler.setFormatter(formatter)
-    file_handler.setLevel(level)
-
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    console_handler.setLevel(level)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    _configured = True
-    return logger
-
-
-def get_logger() -> logging.Logger:
-    """Return the project logger, configuring it with default settings if needed."""
-    return setup_logger()
-
-
-logger = setup_logger()
-
-
-def info(message: str) -> None:
-    logger.info(message)
-
-
-def warning(message: str) -> None:
-    logger.warning(message)
-
-
-def error(message: str) -> None:
-    logger.error(message)
-
-
-def debug(message: str) -> None:
-    logger.debug(message)
-
-
-def exception(message: str) -> None:
-    logger.exception(message)
-
-
-def log_client_connected(address) -> None:
-    info(f"Client connected: {address}")
-
-
-def log_client_disconnected(address) -> None:
-    info(f"Client disconnected: {address}")
-
-
-def log_upload_started(address, filename: str, size: Optional[int] = None) -> None:
-    extra = f", size={size} bytes" if size is not None else ""
-    info(f"Upload started: client={address}, filename={filename!r}{extra}")
-
-
-def log_upload_completed(address, filename: str) -> None:
-    info(f"Upload completed: client={address}, filename={filename!r}")
-
-
-def log_validation_failed(address, filename: str, code: str, message: str) -> None:
-    warning(
-        f"Validation failed: client={address}, filename={filename!r}, "
-        f"code={code}, message={message}"
-    )
-
-
-def log_security_event(address, message: str) -> None:
-    warning(f"Security event: client={address}, {message}")
-
-
-def log_error(address, message: str) -> None:
-    error(f"Client error: client={address}, {message}")
+    def _prune_locked(self):
+        """Xoá bớt tệp log cũ, chỉ giữ max_files - 1 tệp (chừa chỗ cho tệp sắp tạo)."""
+        if not self.max_files:
+            return
+        files = sorted(self.log_dir.glob("server_*.log"), key=lambda p: p.stat().st_mtime)
+        for old in files[: max(len(files) - (self.max_files - 1), 0)]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
