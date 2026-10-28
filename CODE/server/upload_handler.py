@@ -9,7 +9,7 @@ from common.utils import format_speed
 from server.validator import validate_filename
 
 MAX_CHUNK = 4 * 1024 * 1024          # khối dữ liệu tối đa chấp nhận (client dùng CHUNK_SIZE nhỏ hơn nhiều)
-IDLE_TIMEOUT = 60                    # giây, client im lặng quá lâu sẽ bị ngắt
+IDLE_TIMEOUT = 300                    # giây, client im lặng quá lâu sẽ bị ngắt
 DISK_MARGIN = 50 * 1024 * 1024       # chừa lại ít nhất 50 MB trống trên ổ đĩa
 PROGRESS_INTERVAL = 0.5
 

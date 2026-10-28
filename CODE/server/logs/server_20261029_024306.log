@@ -1,0 +1,15 @@
+=== Phiên server bắt đầu lúc 2026-10-29 02:43:06 ===
+[2026-10-29 02:43:06] Server đã bắt đầu lắng nghe trên 127.0.0.1:5000
+[2026-10-29 02:43:06] Thư mục lưu tệp: C:/Users/ADMIN/Downloads/test
+[2026-10-29 02:43:06] Dung lượng tối đa mỗi tệp: 500 MB
+[2026-10-29 02:43:06] Tệp log phiên này: C:\cloud\OneDrive\Tài liệu\GitHub\LTM_Group_13\CODE\server\logs\server_20261029_024306.log
+[2026-10-29 02:43:12] Client 127.0.0.1:54574 đã kết nối
+[2026-10-29 02:44:12] Client 127.0.0.1:54574 đã ngắt kết nối
+[2026-10-29 02:44:23] Bắt đầu nhận file big_test.bin (100.0 MB) từ 127.0.0.1:54597
+[2026-10-29 02:44:24] Đã nhận hoàn tất big_test_29102026_024423.bin (đổi tên từ big_test.bin) - 100.0 MB, 0.5s, 190.2 MB/s - từ 127.0.0.1:54597
+[2026-10-29 02:45:43] Bắt đầu nhận file big_test.bin (100.0 MB) từ 127.0.0.1:54638
+[2026-10-29 02:45:43] Đã nhận hoàn tất big_test_29102026_024543.bin (đổi tên từ big_test.bin) - 100.0 MB, 0.4s, 235.2 MB/s - từ 127.0.0.1:54638
+[2026-10-29 02:45:49] Bắt đầu nhận file big_test.bin (100.0 MB) từ 127.0.0.1:54640
+[2026-10-29 02:45:49] Đã nhận hoàn tất big_test_29102026_024549.bin (đổi tên từ big_test.bin) - 100.0 MB, 0.6s, 176.0 MB/s - từ 127.0.0.1:54640
+[2026-10-29 02:47:31] Client 127.0.0.1:58280 đã kết nối
+[2026-10-29 02:48:31] Client 127.0.0.1:58280 đã ngắt kết nối

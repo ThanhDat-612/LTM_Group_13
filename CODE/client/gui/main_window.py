@@ -1,4 +1,4 @@
-
+from common.protocol import recv_json, send_json
 import tkinter as tk
 from tkinter import ttk
 
@@ -75,15 +75,35 @@ class FileTransferApp:
             self.status.set("IP không được để trống")
             return
 
+        sock = None
+
         try:
-            self.sock = create_connection(host, port, timeout=3)
+            # Bước 1: Mở kết nối TCP
+            sock = create_connection(host, port, timeout=3)
+
+            # Bước 2: Gửi HELLO để server đăng ký phiên client
+            send_json(sock, {"type": "HELLO"})
+
+            # Bước 3: Chờ server xác nhận
+            response = recv_json(sock)
+
+            if not response or response.get("type") != "WELCOME":
+                raise ConnectionError("Server không xác nhận kết nối")
+
+            # Bước 4: Giữ kết nối để client hiển thị trong danh sách
+            sock.settimeout(None)
+            self.sock = sock
+
             self.status.set(f"Đã kết nối đến {host}:{port}")
             self.connect_button.config(state="disabled")
             self.disconnect_button.config(state="normal")
+
         except (OSError, ValueError, TypeError) as error:
+            if sock is not None:
+                close_connection(sock)
+
             self.sock = None
             self.status.set(f"Kết nối thất bại: {error}")
-
     def disconnect(self):
         if self.sock is not None:
             close_connection(self.sock)
