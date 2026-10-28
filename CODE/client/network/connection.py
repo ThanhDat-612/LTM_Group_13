@@ -5,7 +5,9 @@ import socket
 def check_connection(host, port, timeout=30):
     """Kiểm tra server có kết nối được không."""
     try:
-        with socket.create_connection((host, int(port)), timeout=timeout):
+        with socket.create_connection(
+            (host, int(port)), timeout=timeout
+        ):
             return True
     except (OSError, ValueError, TypeError):
         return False
@@ -13,7 +15,9 @@ def check_connection(host, port, timeout=30):
 
 def create_connection(host, port, timeout=30):
     """Tạo kết nối TCP và giữ socket mở."""
-    return socket.create_connection((host, int(port)), timeout=timeout)
+    return socket.create_connection(
+        (host, int(port)), timeout=timeout
+    )
 
 
 def close_connection(sock):

@@ -48,16 +48,13 @@ class FileTransferApp:
         )
         self.disconnect_button.grid(row=0, column=5)
 
-        self.status_label = ttk.Label(
-            frame, textvariable=self.status
-        )
-        self.status_label.grid(
+        ttk.Label(frame, textvariable=self.status).grid(
             row=1, column=0, columnspan=6,
             sticky="w", pady=(16, 0)
         )
 
         self.host_entry.focus_set()
-        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+        root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def connect(self):
         if self.sock is not None:
@@ -65,18 +62,17 @@ class FileTransferApp:
             return
 
         host = self.host.get().strip()
-        port_text = self.port.get().strip()
-
-        if not host:
-            self.status.set("IP không được để trống")
-            return
 
         try:
-            port = int(port_text)
+            port = int(self.port.get().strip())
             if not 1 <= port <= 65535:
                 raise ValueError
         except ValueError:
             self.status.set("Port phải từ 1 đến 65535")
+            return
+
+        if not host:
+            self.status.set("IP không được để trống")
             return
 
         try:
