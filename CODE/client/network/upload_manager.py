@@ -88,17 +88,47 @@ class UploadManager:
                     )
                     active[future] = job
 
+                    print("[DEBUG] Future type:", type(future))
+                    print("[DEBUG] Future id:", id(future))
+                    print("[DEBUG] Future done sau submit:", future.done())
+
                     print(f"[DANG UPLOAD] {job.name}")
                     print(f"[SO TAI TAC] {len(active)}/{self.max_concurrent}")
 
                 if not active:
                     break
+                
 
-                done, _ = wait(
+                print("[DEBUG] So future dang cho:", len(active))
+
+                done, not_done = wait(
                     active,
+                    timeout=10,
                     return_when=FIRST_COMPLETED,
                 )
 
+                print("[DEBUG] Future hoan tat:", len(done))
+                print("[DEBUG] Future chua hoan tat:", len(not_done))
+
+                if not done:
+                    for future, job in active.items():
+                        print(f"[DEBUG] Job: {job.name}")
+                        print(f"[DEBUG] done: {future.done()}")
+                        print(f"[DEBUG] running: {future.running()}")
+                        print(f"[DEBUG] cancelled: {future.cancelled()}")
+                    continue
+
+                print("[DEBUG] Future hoan tat:", len(done))
+                print("[DEBUG] Future chua hoan tat:", len(not_done))
+
+                if not done:
+                    for future, job in active.items():
+                        print(
+                            f"[DEBUG] {job.name}: "
+                            f"done={future.done()}, "
+                            f"cancelled={future.cancelled()}"
+                        )
+                    continue
                 for future in done:
                     job = active.pop(future)
 
@@ -125,5 +155,10 @@ class UploadManager:
             return self._cancelled
 
     def _upload_one(self, job: UploadJob) -> dict:
+        print(f"[DEBUG] Bat dau _upload_one: {job.name}")
+
         worker = self.worker_factory()
-        return worker.upload(job)
+        result = worker.upload(job)
+
+        print(f"[DEBUG] _upload_one sap return: {job.name}")
+        return result

@@ -121,9 +121,10 @@ class UploadWorker:
 
             # 4. Tell the server that no more chunks will follow.
             send_json(sock, {"type": "UPLOAD_DONE"})
+            print("[DEBUG] Da gui UPLOAD_DONE, dang cho server tra ket qua...")
 
             result = recv_json(sock)
-
+            print(f"[DEBUG] Server tra ve: {result}")
             if result.get("type") != "UPLOAD_RESULT":
                 raise UploadProtocolError(
                     f"Unexpected upload result: {result}"
