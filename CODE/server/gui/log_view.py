@@ -51,25 +51,37 @@ class LogView(ttk.Frame):
             self.text.see("end")
         self.text.configure(state="disabled")
 
+    
     def set_logs(self, logs, total=None):
-        """Chỉ chèn thêm các dòng mới (không nháy, giữ vị trí cuộn).
-        total: tổng số dòng server đã ghi từ trước đến nay (server.log_total). Cần khi server
-        giới hạn độ dài danh sách log, vì lúc đó len(logs) không còn tăng nữa."""
+        """Hiển thị các dòng log mới và đồng bộ khi bộ đếm thay đổi."""
         logs = list(logs)
+
         if total is None:
-            if len(logs) < self._shown:      # log bị xoá -> làm lại từ đầu
+            if len(logs) < self._shown:
                 self._wipe()
             for item in logs[self._shown:]:
                 self._insert(item)
             self._shown = len(logs)
             return
-        new = total - self._shown_total
-        if new < 0:                          # bộ đếm của server bị đặt lại
+
+        # Nếu server xóa log hoặc bộ đếm bị đặt lại
+        if total < self._shown_total:
             self._wipe()
-            new = len(logs)
-        if new > 0:
-            for item in logs[-new:]:
+            for item in logs:
                 self._insert(item)
+            self._shown = len(logs)
+            self._shown_total = total
+            return
+
+        # Chèn các log mới, không chèn lại log cũ
+        new_count = total - self._shown_total
+        if new_count > 0:
+            available = min(new_count, len(logs))
+            if available:
+                for item in logs[-available:]:
+                    self._insert(item)
+
+        self._shown = len(logs)
         self._shown_total = total
 
     def _wipe(self, reset_counters=True):
