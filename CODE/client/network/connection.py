@@ -1,31 +1,25 @@
-
 import socket
 
 
 def check_connection(host, port, timeout=30):
-    """Kiểm tra server có kết nối được không."""
+    """Kiểm tra kết nối TCP đến server."""
     try:
-        with socket.create_connection(
-            (host, int(port)), timeout=timeout
-        ):
+        port = int(port)
+        with socket.create_connection((host, port), timeout=timeout):
             return True
-    except (OSError, ValueError, TypeError):
+    except OSError:
         return False
+    return False
 
 
-def create_connection(host, port, timeout=30):
-    """Tạo kết nối TCP và giữ socket mở."""
-    return socket.create_connection(
-        (host, int(port)), timeout=timeout
-    )
+def ping_server(host, port, timeout=2):
+    try:
+        port = int(port)
+        start = __import__("time").time()
+        with socket.create_connection((host, port), timeout=timeout):
+            elapsed_ms = ( __import__("time").time() - start ) * 1000
+            return round(elapsed_ms, 1)
+    except OSError:
+        return None
 
 
-def close_connection(sock):
-    """Đóng kết nối TCP."""
-    if sock is not None:
-        try:
-            sock.shutdown(socket.SHUT_RDWR)
-        except OSError:
-            pass
-        finally:
-            sock.close()
