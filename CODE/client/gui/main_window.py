@@ -1,9 +1,5 @@
-<<<<<<< HEAD
-from common.protocol import recv_json, send_json
-=======
 import os
 import threading
->>>>>>> main
 import tkinter as tk
 from tkinter import filedialog, ttk
 
@@ -117,37 +113,6 @@ class FileTransferApp:
             self._set_status("Port phải là số nguyên", styles.DANGER)
             return
 
-<<<<<<< HEAD
-        sock = None
-
-        try:
-            # Bước 1: Mở kết nối TCP
-            sock = create_connection(host, port, timeout=3)
-
-            # Bước 2: Gửi HELLO để server đăng ký phiên client
-            send_json(sock, {"type": "HELLO"})
-
-            # Bước 3: Chờ server xác nhận
-            response = recv_json(sock)
-
-            if not response or response.get("type") != "WELCOME":
-                raise ConnectionError("Server không xác nhận kết nối")
-
-            # Bước 4: Giữ kết nối để client hiển thị trong danh sách
-            sock.settimeout(None)
-            self.sock = sock
-
-            self.status.set(f"Đã kết nối đến {host}:{port}")
-            self.connect_button.config(state="disabled")
-            self.disconnect_button.config(state="normal")
-
-        except (OSError, ValueError, TypeError) as error:
-            if sock is not None:
-                close_connection(sock)
-
-            self.sock = None
-            self.status.set(f"Kết nối thất bại: {error}")
-=======
         # Kiểm tra mạng ở thread riêng để cửa sổ không bị đơ
         self.connect_button.state(["disabled"])
         self._set_status(f"Đang kết nối đến {host}:{port}…", styles.MUTED)
@@ -189,7 +154,6 @@ class FileTransferApp:
             self.disconnect()
             self._set_status("● Mất kết nối đến server", styles.DANGER)
 
->>>>>>> main
     def disconnect(self):
         """Ngắt kết nối: hủy mọi upload đang chạy / đang chờ và đưa giao diện về trạng thái ban đầu."""
         if self.session:

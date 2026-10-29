@@ -1,157 +1,122 @@
-from __future__ import annotations
-
-import hashlib
+import socket
+import threading
+import time
 from pathlib import Path
-from typing import Callable, Optional
 
-from common.protocol import recv_json, send_json
-from client.network.connection import (
-    create_connection,
-    close_connection,
-)
-from client.network.speed_tracker import (
-    SpeedSnapshot,
-    SpeedTracker,
-)
-from client.network.upload_queue import UploadJob
+from common.constants import CHUNK_SIZE, FILE_STATUS_COMPLETED, FILE_STATUS_ERROR, FILE_STATUS_UPLOADING
+from common.protocol import pack_json, recv_json, send_json
+from common.utils import format_speed
+
+CANCELLED_STATUS = "đã hủy"   # từ "hủy" được giao diện nhận diện để đổi màu
+
+CONNECT_TIMEOUT = 10      # giây, cho kết nối và gửi/nhận thông thường
+RESULT_TIMEOUT = 120      # giây, chờ server ghi xong tệp sau UPLOAD_DONE
+EMIT_INTERVAL = 0.1       # giây, giới hạn tần suất cập nhật giao diện
 
 
-ProgressCallback = Callable[[SpeedSnapshot], None]
-
-
-class UploadProtocolError(RuntimeError):
+class UploadCancelled(Exception):
     pass
 
 
-class UploadWorker:
-    def __init__(
-        self,
-        host: str,
-        port: int,
-        *,
-        chunk_size: int = 1024 * 1024,
-        timeout: float = 30.0,
-        tracker: Optional[SpeedTracker] = None,
-        progress_callback: Optional[ProgressCallback] = None,
-    ) -> None:
-        if not 1 <= int(port) <= 65535:
-            raise ValueError(
-                "port must be between 1 and 65535"
-            )
-
-        if chunk_size <= 0 or chunk_size > 4 * 1024 * 1024:
-            raise ValueError(
-                "chunk_size must be between 1 byte and 4 MiB"
-            )
-
+class UploadWorker(threading.Thread):
+    def __init__(self, file_path, host, port, callback, queue_controller):
+        super().__init__(daemon=True)
+        self.key = file_path              # đúng giá trị đã enqueue -> mark_done khớp với hàng đợi
+        self.file_path = Path(file_path)
         self.host = host
-        self.port = int(port)
-        self.chunk_size = int(chunk_size)
-        self.timeout = timeout
-        self.tracker = tracker or SpeedTracker()
-        self.progress_callback = progress_callback
+        self.port = port
+        self.callback = callback
+        self.queue_controller = queue_controller
+        self._stop_event = threading.Event()
+        self._sock = None
 
-    def upload(self, job: UploadJob) -> dict:
-        path = Path(job.file_path)
+    def stop(self):
+        """Hủy upload: đặt cờ và đóng socket để thoát cả khi đang chờ server trả lời."""
+        self._stop_event.set()
+        sock = self._sock
+        if sock is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
 
-        if not path.is_file():
-            raise FileNotFoundError(path)
+    def _emit(self, status, progress, speed, detail):
+        self.callback(self.file_path.name, status, progress, speed, detail)
 
-        total = path.stat().st_size
-        file_id = job.job_id
+    def _check_cancel(self):
+        if self._stop_event.is_set():
+            raise UploadCancelled()
 
-        self.tracker.start(file_id, total)
-
-        sock = None
-        sent = 0
-        digest = hashlib.sha256()
-
+    def run(self):
+        progress = 0
         try:
-            sock = create_connection(
-                self.host,
-                self.port,
-                timeout=self.timeout,
-            )
-            sock.settimeout(self.timeout)
+            if not self.file_path.is_file():
+                self._emit(FILE_STATUS_ERROR, 0, "0 B/s", "Tệp không tồn tại")
+                return
 
-            send_json(sock, {
-                "type": "UPLOAD_REQUEST",
-                "filename": path.name,
-                "size": total,
-            })
+            self._check_cancel()
+            self._emit(FILE_STATUS_UPLOADING, 0, "0 B/s", "Đang gửi")
+            total = self.file_path.stat().st_size
 
-            ack = recv_json(sock)
+            with socket.create_connection((self.host, int(self.port)), timeout=CONNECT_TIMEOUT) as sock:
+                self._sock = sock
+                self._check_cancel()
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-            if ack.get("type") == "UPLOAD_ERROR":
-                raise UploadProtocolError(
-                    ack.get("message", "Server rejected upload")
-                )
+                send_json(sock, {
+                    "type": "UPLOAD_REQUEST",
+                    "filename": self.file_path.name,
+                    "size": total,
+                })
+                ack = recv_json(sock)
+                if not ack:
+                    raise RuntimeError("Server không phản hồi hợp lệ")
+                if ack.get("type") == "UPLOAD_ERROR":
+                    raise RuntimeError(ack.get("message", "Server từ chối upload"))
 
-            if (
-                ack.get("type") != "UPLOAD_ACK"
-                or ack.get("status") != "accepted"
-            ):
-                raise UploadProtocolError(
-                    f"Unexpected upload acknowledgement: {ack}"
-                )
+                sent = 0
+                start = time.monotonic()
+                last_emit = 0.0
+                with open(self.file_path, "rb") as fh:
+                    while True:
+                        self._check_cancel()
+                        chunk = fh.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        sock.sendall(pack_json({"type": "FILE_DATA", "size": len(chunk)}) + chunk)
+                        sent += len(chunk)
 
-            # 3. Send each JSON header followed by raw chunk bytes.
-            with path.open("rb") as source:
-                while True:
-                    chunk = source.read(self.chunk_size)
+                        now = time.monotonic()
+                        if now - last_emit >= EMIT_INTERVAL:
+                            last_emit = now
+                            progress = min(int(sent / total * 100), 99) if total else 99
+                            speed = sent / max(now - start, 0.1)
+                            self._emit(FILE_STATUS_UPLOADING, progress, format_speed(speed), "Đang gửi")
 
-                    if not chunk:
-                        break
+                if sent != total:
+                    raise RuntimeError("Dung lượng tệp thay đổi trong lúc gửi")
 
-                    send_json(sock, {
-                        "type": "FILE_DATA",
-                        "size": len(chunk),
-                    })
+                self._check_cancel()
+                send_json(sock, {"type": "UPLOAD_DONE"})
+                sock.settimeout(RESULT_TIMEOUT)
+                result = recv_json(sock)
+                if result.get("status") == "success":
+                    self._emit(FILE_STATUS_COMPLETED, 100, "0 B/s", "Hoàn tất")
+                else:
+                    raise RuntimeError(result.get("message", "Upload thất bại"))
 
-                    sock.sendall(chunk)
-                    digest.update(chunk)
-                    sent += len(chunk)
-
-                    snapshot = self.tracker.update(
-                        file_id, sent
-                    )
-
-                    if self.progress_callback:
-                        self.progress_callback(snapshot)
-
-            # 4. Tell the server that no more chunks will follow.
-            send_json(sock, {"type": "UPLOAD_DONE"})
-            print("[DEBUG] Da gui UPLOAD_DONE, dang cho server tra ket qua...")
-
-            result = recv_json(sock)
-            print(f"[DEBUG] Server tra ve: {result}")
-            if result.get("type") != "UPLOAD_RESULT":
-                raise UploadProtocolError(
-                    f"Unexpected upload result: {result}"
-                )
-
-            if result.get("status") != "success":
-                raise UploadProtocolError(
-                    result.get("message", "Upload failed")
-                )
-
-            snapshot = self.tracker.finish(file_id)
-
-            if self.progress_callback:
-                self.progress_callback(snapshot)
-
-            return {
-                "file_id": file_id,
-                "filename": path.name,
-                "final_name": result.get(
-                    "final_name", path.name
-                ),
-                "bytes_sent": sent,
-                "total_bytes": total,
-                "sha256": digest.hexdigest(),
-                "status": "completed",
-            }
-
+        except Exception as exc:
+            # Lỗi socket do chính mình đóng khi hủy cũng được coi là "đã hủy"
+            if isinstance(exc, UploadCancelled) or self._stop_event.is_set():
+                self._emit(CANCELLED_STATUS, progress, "0 B/s", "Đã hủy upload")
+            elif isinstance(exc, EOFError):
+                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Server đã đóng kết nối giữa chừng")
+            elif isinstance(exc, socket.timeout):
+                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Server không phản hồi (quá thời gian chờ)")
+            elif isinstance(exc, ConnectionRefusedError):
+                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Server từ chối kết nối")
+            else:
+                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", str(exc))
         finally:
-            if sock is not None:
-                close_connection(sock)
+            # Luôn giải phóng slot để tệp kế tiếp trong hàng đợi được gửi, dù tệp này lỗi hay bị hủy
+            self.queue_controller.mark_done(self.key)
