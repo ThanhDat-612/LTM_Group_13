@@ -4,7 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 from client.gui import styles
-from client.gui.drop_area import DropArea
+from client.gui.drop_area import HINT, DropArea
 from client.gui.file_list_view import FileListView
 from client.network.session import ClientSession
 from client.network.upload_manager import UploadManager
@@ -26,6 +26,7 @@ class FileTransferApp:
         self.manager = None
         self.session = None
         self.connected = False
+        self.connecting = False
 
         root.title("Client Upload Manager")
         root.geometry("820x700")
@@ -102,6 +103,8 @@ class FileTransferApp:
             self.connect()
 
     def connect(self):
+        if self.connected or self.connecting:
+            return
         host = self.host.get().strip()
         port_text = self.port.get().strip()
         if not host:
@@ -112,8 +115,12 @@ class FileTransferApp:
         except ValueError:
             self._set_status("Port phải là số nguyên", styles.DANGER)
             return
+        if not 1 <= port <= 65535:
+            self._set_status("Port phải từ 1 đến 65535", styles.DANGER)
+            return
 
         # Kiểm tra mạng ở thread riêng để cửa sổ không bị đơ
+        self.connecting = True
         self.connect_button.state(["disabled"])
         self._set_status(f"Đang kết nối đến {host}:{port}…", styles.MUTED)
         threading.Thread(target=self._probe, args=(host, port), daemon=True).start()
@@ -125,16 +132,23 @@ class FileTransferApp:
         try:
             ping_ms = session.connect(timeout=3)
             ok = True
-        except (OSError, EOFError, ValueError):
+        except (OSError, EOFError, ValueError, OverflowError):
             ping_ms, ok = None, False
         self.root.after(0, self._probe_done, host, port, ok, ping_ms, session)
 
     def _probe_done(self, host, port, ok, ping_ms, session):
+        self.connecting = False
         self.connect_button.state(["!disabled"])
         if ok:
             self.connected = True
             self.session = session
-            self.manager = None  # manager mới sẽ dùng IP/Port hiện tại
+            # Dừng manager cũ trước khi tạo manager cho phiên kết nối mới.
+            if self.manager:
+                self.manager.stop()
+            self.manager = UploadManager(host, port, self._on_upload_update, max_concurrent=3)
+            self.host.set(host)
+            self.port.set(str(port))
+            self.drop_area.set_text(HINT)
             self._set_status(f"● Đã kết nối đến {host}:{port}", styles.SUCCESS)
             self.ping.set(f"Ping: {ping_ms} ms")
             self.connect_button.configure(text="Ngắt kết nối", style="Danger.TButton")
@@ -171,6 +185,9 @@ class FileTransferApp:
 
     # ---------- Chọn / thả tệp ----------
     def choose_files(self, paths=None):
+        if not self.connected:
+            self.drop_area.set_text("Hãy kết nối đến server trước khi chọn file")
+            return
         if paths:  # được gọi từ vùng kéo thả
             self.handle_drop(paths)
             return
@@ -188,6 +205,9 @@ class FileTransferApp:
         self.handle_drop(event.data)
 
     def handle_drop(self, file_list):
+        if not self.connected or self.manager is None:
+            self.drop_area.set_text("Hãy kết nối đến server trước khi chọn file")
+            return
         if isinstance(file_list, str):
             try:
                 sources = list(self.root.tk.splitlist(file_list))
@@ -210,10 +230,6 @@ class FileTransferApp:
         if not new_files:
             return
 
-        if not self.manager:
-            host = self.host.get().strip() or "127.0.0.1"
-            port = self.port.get().strip() or "5000"
-            self.manager = UploadManager(host, port, self._on_upload_update, max_concurrent=3)
         self.manager.add_files(new_files)  # chỉ gửi tệp mới
 
     # ---------- Hủy ----------
@@ -244,8 +260,6 @@ class FileTransferApp:
         if file_name not in self.file_list.items:   # danh sách vừa bị xoá, bỏ qua cập nhật muộn
             return
         self.file_list.add_or_update(file_name, status, progress, speed, detail)
-        color, _, _ = styles.status_kind(status)
-        self._set_status(f"{file_name} — {status}", color)
         if styles.is_finished(status):
             # Giải phóng khỏi danh sách theo dõi để có thể gửi lại tệp này sau (ví dụ sau khi lỗi / hủy)
             self.upload_files = [p for p in self.upload_files if os.path.basename(p) != file_name]
