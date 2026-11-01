@@ -51,9 +51,8 @@ class LogView(ttk.Frame):
             self.text.see("end")
         self.text.configure(state="disabled")
 
-    
     def set_logs(self, logs, total=None):
-        """Hiển thị các dòng log mới và đồng bộ khi bộ đếm thay đổi."""
+        """Hiển thị các dòng log mới đồng thời giữ ổn định khi server cắt bớt lịch sử log."""
         logs = list(logs)
 
         if total is None:
@@ -64,7 +63,6 @@ class LogView(ttk.Frame):
             self._shown = len(logs)
             return
 
-        # Nếu server xóa log hoặc bộ đếm bị đặt lại
         if total < self._shown_total:
             self._wipe()
             for item in logs:
@@ -73,8 +71,11 @@ class LogView(ttk.Frame):
             self._shown_total = total
             return
 
-        # Chèn các log mới, không chèn lại log cũ
         new_count = total - self._shown_total
+        if new_count < 0:
+            self._wipe()
+            new_count = len(logs)
+
         if new_count > 0:
             available = min(new_count, len(logs))
             if available:
