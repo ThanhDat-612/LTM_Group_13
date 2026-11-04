@@ -1,11 +1,15 @@
+import logging
 import tkinter as tk
 
 from client.gui import styles
 
 try:
-    from tkinterdnd2 import DND_FILES
-except Exception:  # pragma: no cover
+    from tkinterdnd2 import COPY, DND_FILES, REFUSE_DROP
+except ImportError:  # pragma: no cover
     DND_FILES = None
+    COPY, REFUSE_DROP = "copy", "refuse_drop"
+
+logger = logging.getLogger(__name__)
 
 HINT = "Thả tệp vào đây hoặc nhấn để chọn file"
 
@@ -27,10 +31,17 @@ class DropArea(tk.Canvas):
             try:
                 self.drop_target_register(DND_FILES)
                 self.dnd_bind("<<Drop>>", self._drop_files)
-                self.dnd_bind("<<DropEnter>>", lambda e: self._set_hover(True))
+                self.dnd_bind("<<DropEnter>>", self._drag_over)
+                self.dnd_bind("<<DropPosition>>", self._drag_over)
                 self.dnd_bind("<<DropLeave>>", lambda e: self._set_hover(False))
-            except Exception:
-                pass
+            except (tk.TclError, AttributeError):
+                logger.exception("Không thể bật kéo thả. Cửa sổ gốc cần dùng TkinterDnD.Tk().")
+
+    def _drag_over(self, event):
+        if not self.callback:
+            return REFUSE_DROP
+        self._set_hover(True)
+        return COPY
 
     def _set_hover(self, value):
         self._hover = value
@@ -58,13 +69,16 @@ class DropArea(tk.Canvas):
     def _drop_files(self, event):
         self._set_hover(False)
         if not self.callback:
-            return
+            return REFUSE_DROP
         try:
             paths = list(self.tk.splitlist(event.data or ""))  # xử lý đúng {đường dẫn có khoảng trắng}
-        except Exception:
-            paths = []
-        if paths:
-            self.callback(paths)
+        except tk.TclError:
+            logger.warning("Dữ liệu kéo thả không hợp lệ", exc_info=True)
+            return REFUSE_DROP
+        if not paths:
+            return REFUSE_DROP
+        self.callback(paths)
+        return COPY
 
     def set_text(self, text):
         self._text = text
