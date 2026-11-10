@@ -1,0 +1,1 @@
+"""Server log view module."""

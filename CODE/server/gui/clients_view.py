@@ -1,0 +1,1 @@
+"""Server clients view module."""

@@ -149,6 +149,24 @@ python -m server.main --headless
 python -m client.main
 ```
 
+## 8.1. Bảo mật upload
+
+Bộ bảo mật dùng chung được tích hợp trực tiếp vào Server và có công cụ kiểm tra độc lập. Xem `docs/SECURITY.md`.
+
+```bash
+# Kiểm tra các quy tắc bảo mật
+python -m server.security --self-test
+
+# Kiểm tra một file
+python -m server.security --scan "duong_dan\\tep_tin.pdf"
+
+# Chạy server và thử upload qua CLI (ở terminal khác)
+python -m server.main
+python -m client.upload_cli "duong_dan\\tep_tin.pdf" --host 127.0.0.1 --port 5000
+```
+
+Lưu ý: công cụ kiểm tra tên file, dung lượng và SHA-256; không phải phần mềm quét virus. GUI hiện tại mới kiểm tra kết nối TCP, chưa được nối chức năng upload file.
+
 ## 8. Kiểm thử
 
 - Functional test cho toàn bộ chức năng bắt buộc.
