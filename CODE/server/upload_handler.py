@@ -6,6 +6,7 @@ from pathlib import Path
 
 from common.protocol import recv_exact, recv_json, send_json
 from common.utils import format_speed
+from server.security import SecurityError, safe_upload_path
 from server.validator import validate_filename
 
 MAX_CHUNK = 4 * 1024 * 1024          # khối dữ liệu tối đa chấp nhận (client dùng CHUNK_SIZE nhỏ hơn nhiều)
@@ -113,9 +114,11 @@ class UploadHandler:
             return
 
         try:
+            # Lọc cú pháp tên file bằng validator.py và kiểm tra thoát thư mục bằng security.py
             safe_name = validate_filename(filename)
-        except ValueError as exc:
-            self._reject(str(exc), f"Client {self.label} gửi tên file không hợp lệ: {filename!r}")
+            safe_upload_path(self.server.upload_dir, safe_name)
+        except (ValueError, SecurityError) as exc:
+            self._reject(str(exc), f"Client {self.label} gửi tên file không hợp lệ hoặc gây rủi ro bảo mật: {filename!r}")
             return
 
         max_size = getattr(self.server, "max_file_size", 0)
