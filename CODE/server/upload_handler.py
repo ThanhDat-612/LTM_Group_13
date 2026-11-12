@@ -1,4 +1,4 @@
-import os
+
 import shutil
 import socket
 import time
@@ -7,6 +7,7 @@ from pathlib import Path
 from common.protocol import recv_exact, recv_json, send_json
 from common.utils import format_speed
 from server.validator import validate_filename
+from server.part_manager import PartManager
 
 MAX_CHUNK = 4 * 1024 * 1024          # khối dữ liệu tối đa chấp nhận (client dùng CHUNK_SIZE nhỏ hơn nhiều)
 IDLE_TIMEOUT = 300                    # giây, client im lặng quá lâu sẽ bị ngắt
@@ -93,14 +94,6 @@ class UploadHandler:
         except (EOFError, OSError):
             raise ClientDisconnected()
 
-    @staticmethod
-    def _discard(*paths):
-        for path in paths:
-            try:
-                Path(path).unlink()
-            except OSError:
-                pass
-
     # ---------- Nhận một tệp ----------
     def _handle_upload_request(self, message):
         filename = message.get("filename", "")
@@ -132,17 +125,18 @@ class UploadHandler:
         except OSError:
             pass
 
+        part_manager = PartManager(upload_dir, self.server.reserve_file)
         try:
-            final_path = self.server.reserve_file(safe_name, upload_dir)
+            paths = part_manager.reserve(safe_name)
         except OSError as exc:
             self._reject(f"Server không tạo được tệp: {exc}")
             return
-        temp_path = final_path.with_name(f".{final_path.name}.part")
+        final_path, temp_path = paths.final_path, paths.temp_path
 
         self.server.update_upload(self.label, safe_name, ST_RECEIVING, 0, "0 B/s")
         self.server.set_client_status(self.client_socket, "đang gửi")
         if not self._safe_send({"type": "UPLOAD_ACK", "status": "accepted", "final_name": final_path.name}):
-            self._discard(final_path)
+            part_manager.discard(final_path, temp_path)
             self.server.update_upload(self.label, safe_name, ST_DISCONNECTED, 0, "0 B/s")
             self.server.finish_upload(self.label, safe_name)
             return
