@@ -1,4 +1,3 @@
-import os
 import shutil
 import socket
 import time
@@ -94,14 +93,6 @@ class UploadHandler:
         except (EOFError, OSError):
             raise ClientDisconnected()
 
-    @staticmethod
-    def _discard(*paths):
-        for path in paths:
-            try:
-                Path(path).unlink()
-            except OSError:
-                pass
-
     # ---------- Nhận một tệp ----------
     def _handle_upload_request(self, message):
         filename = message.get("filename", "")
@@ -136,16 +127,17 @@ class UploadHandler:
             pass
 
         try:
-            final_path = self.server.reserve_file(safe_name, upload_dir)
+            paths = self.server.part_manager.reserve(safe_name, upload_dir)
         except OSError as exc:
             self._reject(f"Server không tạo được tệp: {exc}")
             return
-        temp_path = final_path.with_name(f".{final_path.name}.part")
+        final_path = paths.final_path
+        temp_path = paths.temp_path
 
         self.server.update_upload(self.label, safe_name, ST_RECEIVING, 0, "0 B/s")
         self.server.set_client_status(self.client_socket, "đang gửi")
         if not self._safe_send({"type": "UPLOAD_ACK", "status": "accepted", "final_name": final_path.name}):
-            self._discard(final_path)
+            self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_DISCONNECTED, 0, "0 B/s")
             self.server.finish_upload(self.label, safe_name)
             return
@@ -186,7 +178,7 @@ class UploadHandler:
             if received != expected_size:
                 raise ValueError(f"Dung lượng nhận được không khớp: mong đợi {expected_size}, thực tế {received}")
 
-            os.replace(temp_path, final_path)   # thay cho tệp giữ chỗ đã tạo lúc đầu
+            self.server.part_manager.commit(paths, received, expected_size)
             committed = True
             self.server.update_upload(self.label, safe_name, ST_DONE, 100, "0 B/s")
             elapsed = max(time.monotonic() - start_time, 0.001)
@@ -196,13 +188,13 @@ class UploadHandler:
             self._safe_send({"type": "UPLOAD_RESULT", "status": "success", "final_name": final_path.name})
 
         except ClientDisconnected:
-            self._discard(temp_path, final_path)
+            self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_DISCONNECTED, 0, "0 B/s")
             self.server.log(f"Client {self.label} ngắt kết nối khi đang gửi {safe_name} "
                             f"(đã nhận {_fmt_size(received)}/{_fmt_size(expected_size)}), đã xoá tệp dở")
         except Exception as exc:
             if not committed:
-                self._discard(temp_path, final_path)
+                self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_ERROR, 0, "0 B/s")
             self.server.log(f"Lỗi khi nhận {safe_name} từ {self.label} (đã nhận {_fmt_size(received)}): {exc}")
             self._safe_send({"type": "UPLOAD_RESULT", "status": "error", "message": str(exc)})

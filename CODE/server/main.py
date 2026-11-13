@@ -1,4 +1,3 @@
-import argparse
 import sys
 from pathlib import Path
 
@@ -11,9 +10,8 @@ from server.server import Server
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Server upload manager")
-    parser.add_argument("--headless", action="store_true")
-    args = parser.parse_args()
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
 
     print("=== Đang khởi động Server LTM Group 13 ===")
     config_path = ROOT / "config.json"
@@ -22,17 +20,6 @@ def main():
     except ConfigError as exc:
         print(f"[CONFIG ERROR] {exc}")
         sys.exit(1)
-
-    if args.headless:
-        try:
-            server.start()
-            while server.is_running:
-                import time
-                time.sleep(1)
-        except KeyboardInterrupt:
-            print("\n[INFO] Đang dừng server theo yêu cầu từ bàn phím...")
-            server.stop()
-        return
 
     try:
         import tkinter as tk
@@ -44,13 +31,7 @@ def main():
         root.mainloop()
     except Exception as exc:
         print(f"[GUI ERROR] Không thể khởi chạy GUI server: {exc}")
-        try:
-            server.start()
-            while server.is_running:
-                import time
-                time.sleep(1)
-        except KeyboardInterrupt:
-            server.stop()
+        sys.exit(1)
 
 
 if __name__ == "__main__":

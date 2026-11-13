@@ -126,7 +126,7 @@ udm10-multi-upload/
 │   └── utils.py               # Định dạng dung lượng/tốc độ, thời gian, tạo thư mục
 │
 ├── server/
-│   ├── main.py                # Khởi chạy server (GUI, hoặc --headless)
+│   ├── main.py                # Khởi chạy server có giao diện
 │   ├── server.py              # Lắng nghe kết nối, mỗi kết nối một luồng, bảng upload, log
 │   ├── upload_handler.py      # Nhận dữ liệu từng file, ghi .part rồi đổi tên
 │   ├── part_manager.py        # (chưa dùng) logic .part hiện nằm trong upload_handler.py
@@ -172,9 +172,6 @@ pip install -r requirements.txt   # cần tkinterdnd2 cho kéo thả
  
 # Server (có GUI)
 python -m server.main
- 
-# Server không GUI (dùng khi test tự động)
-python -m server.main --headless
  
 # Client
 python -m client.main

@@ -6,8 +6,10 @@ from pathlib import Path
 
 from common.utils import ensure_dir, timestamp_label
 from server.config_loader import load_config
+from server.duplicate_policy import resolve_duplicate_name
 from server.logger import SessionLogger
 from server.part_manager import PartManager
+from server.security import safe_upload_path
 from server.upload_handler import UploadHandler
 
 MAX_LOGS = 200
@@ -37,7 +39,7 @@ class Server:
         self._active_handlers = 0    # số luồng xử lý kết nối còn chạy (để tắt server chờ chúng xong)
         self.gui = None
         self.file_logger = SessionLogger(config.log_dir, config.max_log_files)
-        self.part_manager = PartManager(self.upload_dir)
+        self.part_manager = PartManager(self.upload_dir, self.reserve_file)
         ensure_dir(self.upload_dir)
 
     def set_gui(self, gui):
@@ -121,7 +123,15 @@ class Server:
         target_dir = Path(upload_dir) if upload_dir is not None else Path(self.upload_dir)
         with self.lock:
             try:
-                return self.part_manager.reserve_file(safe_name, upload_dir=target_dir)
+                while True:
+                    unique_name = resolve_duplicate_name(safe_name, target_dir)
+                    target = safe_upload_path(target_dir, unique_name)
+                    try:
+                        with target.open("xb"):
+                            pass
+                        return target
+                    except FileExistsError:
+                        continue
             except OSError as exc:
                 raise OSError(f"Không tìm được tên tệp khả dụng: {exc}") from exc
 
@@ -150,11 +160,7 @@ class Server:
             log_note = f"Không tạo được tệp log ({exc}), nhật ký chỉ hiển thị trên giao diện"
 
         ensure_dir(self.upload_dir)
-        for stale in Path(self.upload_dir).glob(".*.part"):   # dọn tệp tạm còn sót lại sau lần chạy trước
-            try:
-                stale.unlink()
-            except OSError:
-                pass
+        PartManager.cleanup_stale(self.upload_dir)
         self.accept_thread = threading.Thread(target=self._accept_loop, args=(sock,), daemon=True)
         self.accept_thread.start()
         self.log(f"Server đã bắt đầu lắng nghe trên {self.host}:{self.port}")

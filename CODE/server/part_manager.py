@@ -23,14 +23,15 @@ class PartManager:
         self.upload_dir = Path(upload_dir)
         self._reserve_file = reserve_file
 
-    def reserve(self, filename: str) -> UploadPaths:
+    def reserve(self, filename: str, upload_dir: str | Path | None = None) -> UploadPaths:
         """Giữ chỗ tên file đích và tạo ``.part`` độc quyền.
 
         Callback ``reserve_file`` của Server bảo vệ việc chọn và tạo file đích
         bằng khóa, tránh hai client ghi đè lên nhau khi upload đồng thời.
         """
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
-        final_path = Path(self._reserve_file(filename, self.upload_dir))
+        target_dir = Path(upload_dir) if upload_dir is not None else self.upload_dir
+        target_dir.mkdir(parents=True, exist_ok=True)
+        final_path = Path(self._reserve_file(filename, target_dir))
         temp_path = final_path.with_name(f".{final_path.name}.part")
         try:
             # 'xb' tránh vô tình ghi đè .part còn sót lại.
