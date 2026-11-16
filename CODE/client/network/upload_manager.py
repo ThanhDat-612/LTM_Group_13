@@ -1,16 +1,19 @@
 import threading
 from pathlib import Path
 
+from client.network.connection import load_runtime_config
 from client.network.upload_queue import UploadQueue
 from client.network.upload_worker import CANCELLED_STATUS, UploadWorker
 
 
 class UploadManager:
-    def __init__(self, host, port, callback, max_concurrent=3):
+    def __init__(self, host, port, callback, max_concurrent=None):
+        runtime = load_runtime_config()
         self.host = host
         self.port = port
         self.callback = callback
-        self.queue = UploadQueue(max_concurrent=max_concurrent)
+        self.max_concurrent = int(max_concurrent if max_concurrent is not None else runtime.get("max_concurrent_uploads", 3))
+        self.queue = UploadQueue(max_concurrent=self.max_concurrent)
         self.lock = threading.Lock()
         self.workers = {}            # key -> UploadWorker đang chạy
         self._cancel_requested = set()
@@ -49,11 +52,18 @@ class UploadManager:
         self.queue.mark_done(file_path)
         self._drain()
 
+    def retry_failed(self, file_path):
+        """Đẩy lại file vào hàng chờ nếu lỗi mạng/đóng socket xảy ra giữa chừng."""
+        with self.lock:
+            self.workers.pop(file_path, None)
+        self.queue.requeue(file_path)
+        self._drain()
+
     # ---------- Hủy ----------
     def cancel(self, file_path):
         """Hủy một tệp: đang chờ thì gỡ khỏi hàng đợi, đang gửi thì dừng worker."""
         if self.queue.remove(file_path):
-            self.callback(Path(file_path).name, CANCELLED_STATUS, 0, "0 B/s", "Đã hủy trước khi gửi")
+            self.callback(file_path, CANCELLED_STATUS, 0, "0 B/s", "Đã hủy trước khi gửi")
             return True
         with self.lock:
             worker = self.workers.get(file_path)
@@ -66,7 +76,7 @@ class UploadManager:
 
     def cancel_all(self):
         for file_path in self.queue.clear_pending():
-            self.callback(Path(file_path).name, CANCELLED_STATUS, 0, "0 B/s", "Đã hủy trước khi gửi")
+            self.callback(file_path, CANCELLED_STATUS, 0, "0 B/s", "Đã hủy trước khi gửi")
         with self.lock:
             workers = list(self.workers.values())
         for worker in workers:

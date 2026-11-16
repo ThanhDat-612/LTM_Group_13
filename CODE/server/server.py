@@ -9,7 +9,7 @@ from server.config_loader import load_config
 from server.duplicate_policy import resolve_duplicate_name
 from server.logger import SessionLogger
 from server.part_manager import PartManager
-from server.security import safe_upload_path
+from server.security import ConnectionLimiter, safe_upload_path
 from server.upload_handler import UploadHandler
 
 MAX_LOGS = 200
@@ -26,6 +26,7 @@ class Server:
         self.upload_dir = str(config.upload_dir)
         self.stop_password = config.stop_password
         self.max_file_size = config.max_file_size_mb * 1024 * 1024   # 0 = không giới hạn
+        self.connection_limiter = ConnectionLimiter(config.max_concurrent_uploads)
 
         self.server_socket = None
         self.is_running = False
@@ -165,6 +166,7 @@ class Server:
         self.accept_thread.start()
         self.log(f"Server đã bắt đầu lắng nghe trên {self.host}:{self.port}")
         self.log(f"Thư mục lưu tệp: {self.upload_dir}")
+        self.log(f"Giới hạn kết nối đồng thời: {self.config.max_concurrent_uploads}")
         limit = f"{self.config.max_file_size_mb} MB" if self.max_file_size else "không giới hạn"
         self.log(f"Dung lượng tối đa mỗi tệp: {limit}")
         for warning in self.config.warnings:
@@ -189,6 +191,7 @@ class Server:
 
     def handle_client(self, client_socket, client_address):
         addr = f"{client_address[0]}:{client_address[1]}"
+        was_session = False
         try:
             UploadHandler(client_socket, client_address, self).process()
         except Exception as exc:
@@ -197,6 +200,8 @@ class Server:
             with self.lock:
                 self.connections.pop(client_socket, None)
                 was_session = self.connected_clients.pop(client_socket, None) is not None
+            if was_session:
+                self.connection_limiter.release()
             try:
                 client_socket.close()
             except OSError:

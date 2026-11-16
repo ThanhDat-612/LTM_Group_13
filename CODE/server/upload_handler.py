@@ -5,7 +5,7 @@ from pathlib import Path
 
 from common.protocol import recv_exact, recv_json, send_json
 from common.utils import format_speed
-from server.security import SecurityError, safe_upload_path
+from server.security import SecurityError, safe_upload_path, validate_upload_destination
 from server.validator import validate_filename
 
 MAX_CHUNK = 4 * 1024 * 1024          # khối dữ liệu tối đa chấp nhận (client dùng CHUNK_SIZE nhỏ hơn nhiều)
@@ -54,6 +54,10 @@ class UploadHandler:
                 self._handle_upload_request(message)
                 continue
             if message_type == "HELLO":
+                if not self.server.connection_limiter.acquire(blocking=False):
+                    self._safe_send({"type": "UPLOAD_ERROR", "message": "Đã đạt giới hạn kết nối client đồng thời"})
+                    self.server.log(f"Client {self.label} bị từ chối: đã đạt giới hạn {self.server.config.max_concurrent_uploads} kết nối đồng thời")
+                    return
                 self.server.register_session(self.client_socket)
                 self._safe_send({"type": "WELCOME", "status": "ok"})
                 continue
@@ -107,6 +111,7 @@ class UploadHandler:
         try:
             # Lọc cú pháp tên file bằng validator.py và kiểm tra thoát thư mục bằng security.py
             safe_name = validate_filename(filename)
+            validate_upload_destination(self.server.upload_dir, safe_name)
             safe_upload_path(self.server.upload_dir, safe_name)
         except (ValueError, SecurityError) as exc:
             self._reject(str(exc), f"Client {self.label} gửi tên file không hợp lệ hoặc gây rủi ro bảo mật: {filename!r}")

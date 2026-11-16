@@ -11,9 +11,11 @@ DEFAULTS = {
     "stop_password": "admin123",
     "max_file_size_mb": 4096,   # 0 = không giới hạn
     "max_log_files": 30,        # số tệp log giữ lại, 0 = giữ tất cả
+    "max_concurrent_uploads": 3,
+    "chunk_size": 65536,
+    "timeout_seconds": 30,
 }
-# Các khoá có thể nằm chung trong config.json nhưng do phía client hoặc phần khác đọc,
-# server không dùng nên bỏ qua, không cảnh báo.
+# Các khoá dùng chung giữa client và server; nếu có mặt trong config.json thì được đọc và áp dụng.
 SHARED_KEYS = {"max_concurrent_uploads", "chunk_size", "timeout_seconds"}
 # Tên khoá cũ vẫn được chấp nhận
 ALIASES = {"host": "server_host", "port": "server_port"}
@@ -33,6 +35,9 @@ class ServerConfig:
     stop_password: str
     max_file_size_mb: int
     max_log_files: int
+    max_concurrent_uploads: int
+    chunk_size: int
+    timeout_seconds: int
     warnings: list = field(default_factory=list)   # ví dụ: khoá lạ trong file cấu hình
 
 
@@ -104,5 +109,8 @@ def load_config(config_path="config.json"):
         stop_password=_as_text("stop_password", data["stop_password"]),
         max_file_size_mb=_as_int("max_file_size_mb", data["max_file_size_mb"], 0),
         max_log_files=_as_int("max_log_files", data["max_log_files"], 0),
+        max_concurrent_uploads=_as_int("max_concurrent_uploads", data["max_concurrent_uploads"], 1),
+        chunk_size=_as_int("chunk_size", data["chunk_size"], 1),
+        timeout_seconds=_as_int("timeout_seconds", data["timeout_seconds"], 1),
         warnings=warnings,
     )
