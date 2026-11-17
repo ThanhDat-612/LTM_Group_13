@@ -24,6 +24,7 @@ class UploadManager:
         if not self.running:
             return
         for file_path in file_paths:
+            self._cancel_requested.discard(file_path)
             self.queue.enqueue(file_path)
         self._drain()
 
@@ -49,6 +50,7 @@ class UploadManager:
     def mark_done(self, file_path):
         with self.lock:
             self.workers.pop(file_path, None)
+        self._cancel_requested.discard(file_path)
         self.queue.mark_done(file_path)
         self._drain()
 
@@ -62,6 +64,7 @@ class UploadManager:
     # ---------- Hủy ----------
     def cancel(self, file_path):
         """Hủy một tệp: đang chờ thì gỡ khỏi hàng đợi, đang gửi thì dừng worker."""
+        self._cancel_requested.discard(file_path)
         if self.queue.remove(file_path):
             self.callback(file_path, CANCELLED_STATUS, 0, "0 B/s", "Đã hủy trước khi gửi")
             return True
@@ -77,6 +80,7 @@ class UploadManager:
     def cancel_all(self):
         for file_path in self.queue.clear_pending():
             self.callback(file_path, CANCELLED_STATUS, 0, "0 B/s", "Đã hủy trước khi gửi")
+        self._cancel_requested.clear()
         with self.lock:
             workers = list(self.workers.values())
         for worker in workers:

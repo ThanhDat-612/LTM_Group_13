@@ -45,6 +45,20 @@ def test_upload_queue_requeues_failed_network_file():
     assert 'a.txt' not in queue.active
 
 
+def test_manager_does_not_keep_stale_cancel_for_readded_file():
+    manager = __import__('client.network.upload_manager', fromlist=['UploadManager']).UploadManager(
+        '127.0.0.1', 1234, lambda *args, **kwargs: None, max_concurrent=1
+    )
+    file_path = 'a.txt'
+    manager._cancel_requested.add(file_path)
+
+    with mock.patch('client.network.upload_manager.UploadWorker') as mock_worker:
+        manager.add_files([file_path])
+
+        assert file_path not in manager._cancel_requested
+        assert not mock_worker.return_value.stop.called
+
+
 def test_server_limiter_applies_to_client_sessions_not_every_upload_socket():
     server = Server.__new__(Server)
     server.is_running = True
