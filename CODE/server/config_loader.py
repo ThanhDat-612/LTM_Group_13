@@ -1,19 +1,19 @@
-"""Đọc và kiểm tra config.json. Thiếu khoá thì dùng giá trị mặc định; sai giá trị thì báo lỗi rõ ràng."""
+"""Đọc và kiểm tra config.json. Tất cả giá trị phải đọc trực tiếp từ file cấu hình."""
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULTS = {
-    "server_host": "127.0.0.1",
-    "server_port": 5000,
-    "upload_dir": "server/storage/uploads",
-    "log_dir": "server/logs",
-    "stop_password": "admin123",
-    "max_file_size_mb": 4096,   # 0 = không giới hạn
-    "max_log_files": 30,        # số tệp log giữ lại, 0 = giữ tất cả
-    "max_concurrent_uploads": 3,
-    "chunk_size": 65536,
-    "timeout_seconds": 30,
+REQUIRED_KEYS = {
+    "server_host",
+    "server_port",
+    "upload_dir",
+    "log_dir",
+    "stop_password",
+    "max_file_size_mb",
+    "max_log_files",
+    "max_concurrent_uploads",
+    "chunk_size",
+    "timeout_seconds",
 }
 # Các khoá dùng chung giữa client và server; nếu có mặt trong config.json thì được đọc và áp dụng.
 SHARED_KEYS = {"max_concurrent_uploads", "chunk_size", "timeout_seconds"}
@@ -76,27 +76,32 @@ def _as_text(name, value):
 
 def load_config(config_path="config.json"):
     path = find_config_path(config_path)
-    raw = {}
-    if path.exists():
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                raw = json.load(fh)
-        except json.JSONDecodeError as exc:
-            raise ConfigError(f"{path.name} không phải JSON hợp lệ: {exc.msg} (dòng {exc.lineno}, cột {exc.colno})")
-        except OSError as exc:
-            raise ConfigError(f"Không đọc được {path}: {exc}")
-        if not isinstance(raw, dict):
-            raise ConfigError(f"{path.name} phải là một đối tượng JSON {{...}}")
+    if not path.exists():
+        raise ConfigError(f"Không tìm thấy tệp cấu hình: {path}")
 
-    data = dict(DEFAULTS)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"{path.name} không phải JSON hợp lệ: {exc.msg} (dòng {exc.lineno}, cột {exc.colno})")
+    except OSError as exc:
+        raise ConfigError(f"Không đọc được {path}: {exc}")
+
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{path.name} phải là một đối tượng JSON {{...}}")
+
+    data = {}
     warnings = []
     for key, value in raw.items():
         key = ALIASES.get(key, key)
-        if key in DEFAULTS:
-            data[key] = value
-        elif key in SHARED_KEYS:
-            continue
-        else:
+        data[key] = value
+
+    missing = sorted(key for key in REQUIRED_KEYS if key not in data)
+    if missing:
+        raise ConfigError(f"Thiếu trường bắt buộc trong {path.name}: {', '.join(missing)}")
+
+    for key in sorted(data):
+        if key not in REQUIRED_KEYS and key not in SHARED_KEYS:
             warnings.append(f'Khoá không dùng trong {path.name}: "{key}"')
 
     base = path.resolve().parent

@@ -1,3 +1,4 @@
+import json
 import threading
 from pathlib import Path
 from unittest import mock
@@ -6,6 +7,7 @@ from client.models import FileItem, FileStatus
 from client.network.connection import load_runtime_config
 from client.network.upload_queue import UploadQueue
 from client.network.upload_worker import CANCELLED_STATUS, UploadCancelled, UploadWorker
+from server.config_loader import ConfigError, load_config
 from server.server import Server
 
 
@@ -43,6 +45,20 @@ def test_upload_queue_requeues_failed_network_file():
     queue.requeue('a.txt')
     assert list(queue.queue) == ['a.txt']
     assert 'a.txt' not in queue.active
+
+
+def test_config_loader_requires_values_from_config_file(tmp_path):
+    cfg = tmp_path / 'config.json'
+    cfg.write_text(json.dumps({
+        'server_host': '127.0.0.1',
+        'server_port': 5000,
+    }), encoding='utf-8')
+
+    try:
+        load_config(cfg)
+        raise AssertionError('Expected ConfigError for missing required keys')
+    except ConfigError as exc:
+        assert 'Thiếu trường bắt buộc' in str(exc)
 
 
 def test_manager_does_not_keep_stale_cancel_for_readded_file():

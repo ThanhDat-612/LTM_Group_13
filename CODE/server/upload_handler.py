@@ -196,7 +196,7 @@ class UploadHandler:
             self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_DISCONNECTED, 0, "0 B/s")
             self.server.log(f"Client {self.label} ngắt kết nối khi đang gửi {safe_name} "
-                            f"(đã nhận {_fmt_size(received)}/{_fmt_size(expected_size)}), đã xoá tệp dở")
+                            f"(đã nhận {_fmt_size(received)}/{_fmt_size(expected_size)}), đã xoá tệp đang tải")
         except Exception as exc:
             if not committed:
                 self.server.part_manager.discard(paths)
