@@ -3,25 +3,32 @@ import threading
 import time
 from pathlib import Path
 
-from common.constants import CHUNK_SIZE, FILE_STATUS_COMPLETED, FILE_STATUS_ERROR, FILE_STATUS_UPLOADING
+from client.network.connection import load_runtime_config
+from common.constants import FILE_STATUS_COMPLETED, FILE_STATUS_ERROR, FILE_STATUS_UPLOADING
 from common.protocol import pack_json, recv_json, send_json
 from common.utils import format_speed
 
-CANCELLED_STATUS = "đã hủy"   # từ "hủy" được giao diện nhận diện để đổi màu
+RUNTIME_CONFIG = load_runtime_config()
+CHUNK_SIZE = int(RUNTIME_CONFIG.get("chunk_size", 65536))
+CONNECT_TIMEOUT = int(RUNTIME_CONFIG.get("timeout_seconds", 30))
+RESULT_TIMEOUT = max(int(RUNTIME_CONFIG.get("timeout_seconds", 30)), 10)
 
-CONNECT_TIMEOUT = 10      # giây, cho kết nối và gửi/nhận thông thường
-RESULT_TIMEOUT = 120      # giây, chờ server ghi xong tệp sau UPLOAD_DONE
-EMIT_INTERVAL = 0.1       # giây, giới hạn tần suất cập nhật giao diện
+CANCELLED_STATUS = "đã hủy"   # từ "hủy" được giao diện nhận diện để đổi màu
+EMIT_INTERVAL = 0.1            # giây, giới hạn tần suất cập nhật giao diện
 
 
 class UploadCancelled(Exception):
     pass
 
 
+class UploadRemoteClosed(Exception):
+    """Raised when the server or network closes the upload socket unexpectedly."""
+
+
 class UploadWorker(threading.Thread):
     def __init__(self, file_path, host, port, callback, queue_controller):
         super().__init__(daemon=True)
-        self.key = file_path              # đúng giá trị đã enqueue -> mark_done khớp với hàng đợi
+        self.key = str(file_path)             # khóa ổn định để đồng bộ với hàng đợi và giao diện
         self.file_path = Path(file_path)
         self.host = host
         self.port = port
@@ -29,6 +36,7 @@ class UploadWorker(threading.Thread):
         self.queue_controller = queue_controller
         self._stop_event = threading.Event()
         self._sock = None
+        self._retried = False
 
     def stop(self):
         """Hủy upload: đặt cờ và đóng socket để thoát cả khi đang chờ server trả lời."""
@@ -41,11 +49,32 @@ class UploadWorker(threading.Thread):
                 pass
 
     def _emit(self, status, progress, speed, detail):
-        self.callback(self.file_path.name, status, progress, speed, detail)
+        self.callback(self.key, status, progress, speed, detail)
 
     def _check_cancel(self):
         if self._stop_event.is_set():
-            raise UploadCancelled()
+            raise UploadCancelled("Upload was cancelled by the user")
+
+    @staticmethod
+    def _classify_exception(exc, stop_event_set):
+        if isinstance(exc, UploadCancelled) or stop_event_set:
+            return CANCELLED_STATUS, "Đã hủy upload"
+
+        if isinstance(exc, (EOFError, ConnectionResetError, BrokenPipeError, ConnectionAbortedError, UploadRemoteClosed)):
+            return FILE_STATUS_ERROR, "Kết nối bị đóng giữa chừng"
+
+        if isinstance(exc, socket.timeout):
+            return FILE_STATUS_ERROR, "Server không phản hồi (quá thời gian chờ)"
+
+        if isinstance(exc, ConnectionRefusedError):
+            return FILE_STATUS_ERROR, "Server từ chối kết nối"
+
+        if isinstance(exc, OSError):
+            errno = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+            if errno in {10054, 104, 32, 107, 109}:
+                return FILE_STATUS_ERROR, "Kết nối mạng bị đóng bởi phía xa"
+
+        return FILE_STATUS_ERROR, str(exc)
 
     def run(self):
         progress = 0
@@ -106,17 +135,24 @@ class UploadWorker(threading.Thread):
                     raise RuntimeError(result.get("message", "Upload thất bại"))
 
         except Exception as exc:
-            # Lỗi socket do chính mình đóng khi hủy cũng được coi là "đã hủy"
-            if isinstance(exc, UploadCancelled) or self._stop_event.is_set():
-                self._emit(CANCELLED_STATUS, progress, "0 B/s", "Đã hủy upload")
-            elif isinstance(exc, EOFError):
-                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Server đã đóng kết nối giữa chừng")
-            elif isinstance(exc, socket.timeout):
-                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Server không phản hồi (quá thời gian chờ)")
-            elif isinstance(exc, ConnectionRefusedError):
-                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Server từ chối kết nối")
-            else:
-                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", str(exc))
+            status, message = self._classify_exception(exc, self._stop_event.is_set())
+            if status == FILE_STATUS_ERROR and self._is_retryable_network_error(exc):
+                self._retried = True
+                self._emit(FILE_STATUS_ERROR, progress, "0 B/s", "Kết nối đóng giữa chừng, sẽ thử lại sau")
+                self.queue_controller.retry_failed(self.key)
+                return
+            self._emit(status, progress, "0 B/s", message)
         finally:
             # Luôn giải phóng slot để tệp kế tiếp trong hàng đợi được gửi, dù tệp này lỗi hay bị hủy
-            self.queue_controller.mark_done(self.key)
+            if not self._retried:
+                self.queue_controller.mark_done(self.key)
+
+    @staticmethod
+    def _is_retryable_network_error(exc):
+        if isinstance(exc, (ConnectionResetError, BrokenPipeError, EOFError, ConnectionAbortedError, OSError)):
+            errno = getattr(exc, "winerror", None) or getattr(exc, "errno", None)
+            if errno in {10054, 104, 32, 107, 109}:
+                return True
+            if isinstance(exc, (ConnectionResetError, BrokenPipeError, EOFError, ConnectionAbortedError)):
+                return True
+        return False

@@ -1,4 +1,3 @@
-import os
 import shutil
 import socket
 import time
@@ -6,7 +5,7 @@ from pathlib import Path
 
 from common.protocol import recv_exact, recv_json, send_json
 from common.utils import format_speed
-from server.security import SecurityError, safe_upload_path
+from server.security import SecurityError, safe_upload_path, validate_upload_destination
 from server.validator import validate_filename
 
 MAX_CHUNK = 4 * 1024 * 1024          # khối dữ liệu tối đa chấp nhận (client dùng CHUNK_SIZE nhỏ hơn nhiều)
@@ -55,6 +54,10 @@ class UploadHandler:
                 self._handle_upload_request(message)
                 continue
             if message_type == "HELLO":
+                if not self.server.connection_limiter.acquire(blocking=False):
+                    self._safe_send({"type": "UPLOAD_ERROR", "message": "Đã đạt giới hạn kết nối client đồng thời"})
+                    self.server.log(f"Client {self.label} bị từ chối: đã đạt giới hạn {self.server.config.max_concurrent_uploads} kết nối đồng thời")
+                    return
                 self.server.register_session(self.client_socket)
                 self._safe_send({"type": "WELCOME", "status": "ok"})
                 continue
@@ -94,14 +97,6 @@ class UploadHandler:
         except (EOFError, OSError):
             raise ClientDisconnected()
 
-    @staticmethod
-    def _discard(*paths):
-        for path in paths:
-            try:
-                Path(path).unlink()
-            except OSError:
-                pass
-
     # ---------- Nhận một tệp ----------
     def _handle_upload_request(self, message):
         filename = message.get("filename", "")
@@ -116,6 +111,7 @@ class UploadHandler:
         try:
             # Lọc cú pháp tên file bằng validator.py và kiểm tra thoát thư mục bằng security.py
             safe_name = validate_filename(filename)
+            validate_upload_destination(self.server.upload_dir, safe_name)
             safe_upload_path(self.server.upload_dir, safe_name)
         except (ValueError, SecurityError) as exc:
             self._reject(str(exc), f"Client {self.label} gửi tên file không hợp lệ hoặc gây rủi ro bảo mật: {filename!r}")
@@ -136,16 +132,17 @@ class UploadHandler:
             pass
 
         try:
-            final_path = self.server.reserve_file(safe_name, upload_dir)
+            paths = self.server.part_manager.reserve(safe_name, upload_dir)
         except OSError as exc:
             self._reject(f"Server không tạo được tệp: {exc}")
             return
-        temp_path = final_path.with_name(f".{final_path.name}.part")
+        final_path = paths.final_path
+        temp_path = paths.temp_path
 
         self.server.update_upload(self.label, safe_name, ST_RECEIVING, 0, "0 B/s")
         self.server.set_client_status(self.client_socket, "đang gửi")
         if not self._safe_send({"type": "UPLOAD_ACK", "status": "accepted", "final_name": final_path.name}):
-            self._discard(final_path)
+            self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_DISCONNECTED, 0, "0 B/s")
             self.server.finish_upload(self.label, safe_name)
             return
@@ -186,7 +183,7 @@ class UploadHandler:
             if received != expected_size:
                 raise ValueError(f"Dung lượng nhận được không khớp: mong đợi {expected_size}, thực tế {received}")
 
-            os.replace(temp_path, final_path)   # thay cho tệp giữ chỗ đã tạo lúc đầu
+            self.server.part_manager.commit(paths, received, expected_size)
             committed = True
             self.server.update_upload(self.label, safe_name, ST_DONE, 100, "0 B/s")
             elapsed = max(time.monotonic() - start_time, 0.001)
@@ -196,13 +193,13 @@ class UploadHandler:
             self._safe_send({"type": "UPLOAD_RESULT", "status": "success", "final_name": final_path.name})
 
         except ClientDisconnected:
-            self._discard(temp_path, final_path)
+            self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_DISCONNECTED, 0, "0 B/s")
             self.server.log(f"Client {self.label} ngắt kết nối khi đang gửi {safe_name} "
-                            f"(đã nhận {_fmt_size(received)}/{_fmt_size(expected_size)}), đã xoá tệp dở")
+                            f"(đã nhận {_fmt_size(received)}/{_fmt_size(expected_size)}), đã xoá tệp đang tải")
         except Exception as exc:
             if not committed:
-                self._discard(temp_path, final_path)
+                self.server.part_manager.discard(paths)
             self.server.update_upload(self.label, safe_name, ST_ERROR, 0, "0 B/s")
             self.server.log(f"Lỗi khi nhận {safe_name} từ {self.label} (đã nhận {_fmt_size(received)}): {exc}")
             self._safe_send({"type": "UPLOAD_RESULT", "status": "error", "message": str(exc)})

@@ -8,6 +8,8 @@ from common.utils import ensure_dir, timestamp_label
 from server.config_loader import load_config
 from server.duplicate_policy import resolve_duplicate_name
 from server.logger import SessionLogger
+from server.part_manager import PartManager
+from server.security import ConnectionLimiter, safe_upload_path
 from server.upload_handler import UploadHandler
 
 MAX_LOGS = 200
@@ -24,6 +26,7 @@ class Server:
         self.upload_dir = str(config.upload_dir)
         self.stop_password = config.stop_password
         self.max_file_size = config.max_file_size_mb * 1024 * 1024   # 0 = không giới hạn
+        self.connection_limiter = ConnectionLimiter(config.max_concurrent_uploads)
 
         self.server_socket = None
         self.is_running = False
@@ -37,6 +40,7 @@ class Server:
         self._active_handlers = 0    # số luồng xử lý kết nối còn chạy (để tắt server chờ chúng xong)
         self.gui = None
         self.file_logger = SessionLogger(config.log_dir, config.max_log_files)
+        self.part_manager = PartManager(self.upload_dir, self.reserve_file)
         ensure_dir(self.upload_dir)
 
     def set_gui(self, gui):
@@ -114,20 +118,23 @@ class Server:
             if key in self.active_uploads:
                 self.active_uploads[key]["finished_at"] = time.monotonic()
 
-    def reserve_file(self, safe_name, upload_dir):
+    def reserve_file(self, safe_name, upload_dir=None):
         """Chọn tên không trùng và giữ chỗ nguyên tử bằng cách tạo tệp rỗng.
         Nhờ đó hai client cùng gửi một tên tệp không bao giờ ghi chung một tệp."""
-        upload_dir = Path(upload_dir)
+        target_dir = Path(upload_dir) if upload_dir is not None else Path(self.upload_dir)
         with self.lock:
-            for _ in range(1000):
-                candidate = upload_dir / resolve_duplicate_name(safe_name, upload_dir)
-                try:
-                    with open(candidate, "xb"):
-                        pass
-                    return candidate
-                except FileExistsError:
-                    continue
-        raise OSError("Không tìm được tên tệp khả dụng")
+            try:
+                while True:
+                    unique_name = resolve_duplicate_name(safe_name, target_dir)
+                    target = safe_upload_path(target_dir, unique_name)
+                    try:
+                        with target.open("xb"):
+                            pass
+                        return target
+                    except FileExistsError:
+                        continue
+            except OSError as exc:
+                raise OSError(f"Không tìm được tên tệp khả dụng: {exc}") from exc
 
     # ---------- Bật / tắt ----------
     def start(self):
@@ -154,15 +161,12 @@ class Server:
             log_note = f"Không tạo được tệp log ({exc}), nhật ký chỉ hiển thị trên giao diện"
 
         ensure_dir(self.upload_dir)
-        for stale in Path(self.upload_dir).glob(".*.part"):   # dọn tệp tạm còn sót lại sau lần chạy trước
-            try:
-                stale.unlink()
-            except OSError:
-                pass
+        PartManager.cleanup_stale(self.upload_dir)
         self.accept_thread = threading.Thread(target=self._accept_loop, args=(sock,), daemon=True)
         self.accept_thread.start()
         self.log(f"Server đã bắt đầu lắng nghe trên {self.host}:{self.port}")
         self.log(f"Thư mục lưu tệp: {self.upload_dir}")
+        self.log(f"Giới hạn kết nối đồng thời: {self.config.max_concurrent_uploads}")
         limit = f"{self.config.max_file_size_mb} MB" if self.max_file_size else "không giới hạn"
         self.log(f"Dung lượng tối đa mỗi tệp: {limit}")
         for warning in self.config.warnings:
@@ -187,6 +191,7 @@ class Server:
 
     def handle_client(self, client_socket, client_address):
         addr = f"{client_address[0]}:{client_address[1]}"
+        was_session = False
         try:
             UploadHandler(client_socket, client_address, self).process()
         except Exception as exc:
@@ -195,6 +200,8 @@ class Server:
             with self.lock:
                 self.connections.pop(client_socket, None)
                 was_session = self.connected_clients.pop(client_socket, None) is not None
+            if was_session:
+                self.connection_limiter.release()
             try:
                 client_socket.close()
             except OSError:

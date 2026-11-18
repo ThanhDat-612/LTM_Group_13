@@ -6,6 +6,8 @@ from tkinter import filedialog, ttk
 from client.gui import styles
 from client.gui.drop_area import HINT, DropArea
 from client.gui.file_list_view import FileListView
+from client.models import FileItem
+from client.network.connection import load_runtime_config
 from client.network.session import ClientSession
 from client.network.upload_manager import UploadManager
 
@@ -17,12 +19,14 @@ except Exception:  # pragma: no cover
 
 class FileTransferApp:
     def __init__(self, root):
+        self.runtime_config = load_runtime_config()
         self.root = root
-        self.host = tk.StringVar(value="127.0.0.1")
-        self.port = tk.StringVar(value="5000")
+        self.host = tk.StringVar(value=str(self.runtime_config.get("server_host", "127.0.0.1")))
+        self.port = tk.StringVar(value=str(self.runtime_config.get("server_port", 5000)))
         self.status = tk.StringVar(value="Chưa kết nối")
         self.ping = tk.StringVar(value="Ping: -- ms")
-        self.upload_files = []      # các tệp đang chờ hoặc đang gửi (khoá giống với UploadManager)
+        self.upload_files = []      # list các đường dẫn đầy đủ của file đang theo dõi
+        self.upload_items = {}
         self.manager = None
         self.session = None
         self.connected = False
@@ -130,7 +134,7 @@ class FileTransferApp:
                                 on_lost=lambda: self.root.after(0, self._lost),
                                 on_ping=lambda ms: self.root.after(0, self._on_ping, ms))
         try:
-            ping_ms = session.connect(timeout=3)
+            ping_ms = session.connect(timeout=int(self.runtime_config.get("timeout_seconds", 3)))
             ok = True
         except (OSError, EOFError, ValueError, OverflowError):
             ping_ms, ok = None, False
@@ -145,7 +149,12 @@ class FileTransferApp:
             # Dừng manager cũ trước khi tạo manager cho phiên kết nối mới.
             if self.manager:
                 self.manager.stop()
-            self.manager = UploadManager(host, port, self._on_upload_update, max_concurrent=3)
+            self.manager = UploadManager(
+                host,
+                port,
+                self._on_upload_update,
+                max_concurrent=int(self.runtime_config.get("max_concurrent_uploads", 3)),
+            )
             self.host.set(host)
             self.port.set(str(port))
             self.drop_area.set_text(HINT)
@@ -220,12 +229,13 @@ class FileTransferApp:
 
         new_files = []
         for path in sources:
-            clean = (path or "").strip().strip("{}")
+            clean = os.path.abspath((path or "").strip().strip("{}"))
             if not clean or not os.path.isfile(clean) or clean in self.upload_files:
                 continue
             self.upload_files.append(clean)
+            self.upload_items[clean] = FileItem.from_upload_update(clean, "waiting", 0, "0 B/s", "Đang chờ trong hàng đợi")
             new_files.append(clean)
-            self.file_list.add_or_update(os.path.basename(clean), "chờ", 0, "0 B/s",
+            self.file_list.add_or_update(clean, os.path.basename(clean), "chờ", 0, "0 B/s",
                                          "Đang chờ trong hàng đợi")
         if not new_files:
             return
@@ -233,13 +243,12 @@ class FileTransferApp:
         self.manager.add_files(new_files)  # chỉ gửi tệp mới
 
     # ---------- Hủy ----------
-    def cancel_file(self, file_name):
+    def cancel_file(self, item_id):
         """Được gọi từ nút Hủy trên từng thẻ tệp."""
         if not self.manager:
             return
-        for path in list(self.upload_files):
-            if os.path.basename(path) == file_name:
-                self.manager.cancel(path)
+        if item_id in self.upload_files:
+            self.manager.cancel(item_id)
 
     def cancel_all(self):
         if self.manager:
@@ -250,19 +259,24 @@ class FileTransferApp:
         self.cancel_all()
         self.file_list.clear()
         self.upload_files.clear()
+        self.upload_items.clear()
 
     # ---------- Cập nhật từ UploadManager ----------
-    def _on_upload_update(self, file_name, status, progress, speed, detail):
+    def _on_upload_update(self, item_id, status, progress, speed, detail):
         # UploadManager chạy ở thread khác -> chuyển về luồng giao diện
-        self.root.after(0, self._apply_update, file_name, status, progress, speed, detail)
+        self.root.after(0, self._apply_update, item_id, status, progress, speed, detail)
 
-    def _apply_update(self, file_name, status, progress, speed, detail):
-        if file_name not in self.file_list.items:   # danh sách vừa bị xoá, bỏ qua cập nhật muộn
+    def _apply_update(self, item_id, status, progress, speed, detail):
+        if item_id not in self.upload_files:
             return
-        self.file_list.add_or_update(file_name, status, progress, speed, detail)
+        self.upload_items[item_id] = FileItem.from_upload_update(item_id, status, progress, speed, detail)
+        if item_id not in self.file_list.items:   # danh sách vừa bị xoá, bỏ qua cập nhật muộn
+            return
+        self.file_list.add_or_update(item_id, os.path.basename(item_id), status, progress, speed, detail)
         if styles.is_finished(status):
             # Giải phóng khỏi danh sách theo dõi để có thể gửi lại tệp này sau (ví dụ sau khi lỗi / hủy)
-            self.upload_files = [p for p in self.upload_files if os.path.basename(p) != file_name]
+            self.upload_files = [p for p in self.upload_files if p != item_id]
+            self.upload_items.pop(item_id, None)
 
     def run(self):
         self.root.mainloop()

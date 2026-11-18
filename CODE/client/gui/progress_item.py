@@ -5,9 +5,10 @@ from client.gui import styles
 
 
 class ProgressItem(ttk.Frame):
-    def __init__(self, master, file_name, status="chờ", progress=0, speed="0 B/s", detail="", on_cancel=None):
+    def __init__(self, master, file_name, status="chờ", progress=0, speed="0 B/s", detail="", item_id=None, on_cancel=None):
         super().__init__(master, style="Card.TFrame", padding=(14, 10))
         self.file_name = file_name
+        self.item_id = item_id or file_name
         self.on_cancel = on_cancel
         self.status_var = tk.StringVar()
         self.progress_var = tk.DoubleVar(value=progress)
@@ -47,7 +48,7 @@ class ProgressItem(ttk.Frame):
         if self.on_cancel:
             self.cancel_button.state(["disabled"])
             self.detail_var.set("Đang hủy…")
-            self.on_cancel(self.file_name)
+            self.on_cancel(self.item_id)
 
     def _apply(self, status, progress):
         color, bar_style, icon = styles.status_kind(status)
