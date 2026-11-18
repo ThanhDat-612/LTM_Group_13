@@ -47,17 +47,17 @@ class FileListView(ttk.Frame):
     def _on_configure(self, event):
         self.canvas.configure(scrollregion=self.canvas.bbox("all"))
 
-    def add_or_update(self, file_name, status, progress, speed, detail=""):
-        if file_name not in self.items:
+    def add_or_update(self, item_id, display_name, status, progress, speed, detail=""):
+        if item_id not in self.items:
             self.empty.pack_forget()
-            widget = ProgressItem(self.container, file_name, status=status,
+            widget = ProgressItem(self.container, display_name, status=status,
                                   progress=progress, speed=speed, detail=detail,
-                                  on_cancel=self.on_cancel)
+                                  item_id=item_id, on_cancel=self.on_cancel)
             widget.pack(fill="x", pady=(0, 8), padx=(0, 6))
-            self.items[file_name] = widget
+            self.items[item_id] = widget
         else:
-            self.items[file_name].update(status=status, progress=progress,
-                                         speed=speed, detail=detail)
+            self.items[item_id].update(status=status, progress=progress,
+                                       speed=speed, detail=detail)
         self._on_configure(None)
 
     def clear(self):
