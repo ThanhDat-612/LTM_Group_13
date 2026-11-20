@@ -3,6 +3,7 @@ import socket
 import threading
 import time
 
+from client.network.connection import load_runtime_config
 from common.protocol import recv_json, send_json
 
 
@@ -18,6 +19,8 @@ class ClientSession(threading.Thread):
         self.interval = interval
         self._stop_event = threading.Event()
         self._sock = None
+        config = load_runtime_config()
+        self.timeout = int(config.get("timeout_seconds", 30))
 
     def _ping(self):
         start = time.monotonic()
@@ -27,11 +30,12 @@ class ClientSession(threading.Thread):
             raise OSError("Phản hồi PING không hợp lệ")
         return round((time.monotonic() - start) * 1000, 1)
 
-    def connect(self, timeout=3):
-        """Kết nối, chào server và đo ping. Trả về ping (ms); ném OSError/EOFError/ValueError nếu thất bại."""
-        sock = socket.create_connection((self.host, self.port), timeout=timeout)
+    def connect(self, timeout=None):
+        """Kết nối, chào server và đo ping; timeout lấy từ config nếu không truyền."""
+        effective_timeout = self.timeout if timeout is None else int(timeout)
+        sock = socket.create_connection((self.host, self.port), timeout=effective_timeout)
         try:
-            sock.settimeout(timeout)
+            sock.settimeout(effective_timeout)
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock = sock
             send_json(sock, {"type": "HELLO"})

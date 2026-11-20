@@ -8,8 +8,8 @@ from common.utils import format_speed
 from server.security import SecurityError, safe_upload_path, validate_upload_destination
 from server.validator import validate_filename
 
-MAX_CHUNK = 4 * 1024 * 1024          # khối dữ liệu tối đa chấp nhận (client dùng CHUNK_SIZE nhỏ hơn nhiều)
 IDLE_TIMEOUT = 300                    # giây, client im lặng quá lâu sẽ bị ngắt
+MAX_CHUNK = 4 * 1024 * 1024          # giới hạn tuyệt đối chống khung dữ liệu quá lớn
 DISK_MARGIN = 50 * 1024 * 1024       # chừa lại ít nhất 50 MB trống trên ổ đĩa
 PROGRESS_INTERVAL = 0.5
 
@@ -40,7 +40,7 @@ class UploadHandler:
 
     # ---------- Vòng lặp chính ----------
     def process(self):
-        self.client_socket.settimeout(IDLE_TIMEOUT)
+        self.client_socket.settimeout(self.server.config.timeout_seconds)
         while True:
             try:
                 message = recv_json(self.client_socket)
@@ -167,6 +167,8 @@ class UploadHandler:
                         continue
                     if chunk_size > MAX_CHUNK:
                         raise ValueError("Khối dữ liệu quá lớn")
+                    if chunk_size > self.server.config.chunk_size:
+                        raise ValueError(f"Khối dữ liệu vượt quá kích thước cấu hình ({self.server.config.chunk_size} byte)")
                     if received + chunk_size > expected_size:
                         raise ValueError("Client gửi vượt quá dung lượng đã khai báo")
 
