@@ -8,6 +8,6 @@
   "max_log_files": 30,
 
   "max_concurrent_uploads": 3,
-  "chunk_size": 65536,
+  "chunk_size": 1024,
   "timeout_seconds": 30
 }
