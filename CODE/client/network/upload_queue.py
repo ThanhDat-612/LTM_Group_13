@@ -31,6 +31,14 @@ class UploadQueue:
             self.active.discard(item)
             self.done.add(item)
 
+    def requeue(self, item):
+        """Đưa file lỗi mạng / socket đóng giữa chừng trở lại hàng đợi để thử lại sau."""
+        with self.lock:
+            self.active.discard(item)
+            self.done.discard(item)
+            if item not in self.queue and item not in self.active:
+                self.queue.append(item)
+
     def remove(self, item):
         """Gỡ một tệp đang chờ (chưa bắt đầu gửi). Trả về True nếu gỡ được."""
         with self.lock:

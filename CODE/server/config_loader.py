@@ -1,19 +1,21 @@
-"""Đọc và kiểm tra config.json. Thiếu khoá thì dùng giá trị mặc định; sai giá trị thì báo lỗi rõ ràng."""
+"""Đọc và kiểm tra config.json. Tất cả giá trị phải đọc trực tiếp từ file cấu hình."""
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-DEFAULTS = {
-    "server_host": "127.0.0.1",
-    "server_port": 5000,
-    "upload_dir": "server/storage/uploads",
-    "log_dir": "server/logs",
-    "stop_password": "admin123",
-    "max_file_size_mb": 4096,   # 0 = không giới hạn
-    "max_log_files": 30,        # số tệp log giữ lại, 0 = giữ tất cả
+REQUIRED_KEYS = {
+    "server_host",
+    "server_port",
+    "upload_dir",
+    "log_dir",
+    "stop_password",
+    "max_file_size_mb",
+    "max_log_files",
+    "max_concurrent_uploads",
+    "chunk_size",
+    "timeout_seconds",
 }
-# Các khoá có thể nằm chung trong config.json nhưng do phía client hoặc phần khác đọc,
-# server không dùng nên bỏ qua, không cảnh báo.
+# Các khoá dùng chung giữa client và server; nếu có mặt trong config.json thì được đọc và áp dụng.
 SHARED_KEYS = {"max_concurrent_uploads", "chunk_size", "timeout_seconds"}
 # Tên khoá cũ vẫn được chấp nhận
 ALIASES = {"host": "server_host", "port": "server_port"}
@@ -33,6 +35,9 @@ class ServerConfig:
     stop_password: str
     max_file_size_mb: int
     max_log_files: int
+    max_concurrent_uploads: int
+    chunk_size: int
+    timeout_seconds: int
     warnings: list = field(default_factory=list)   # ví dụ: khoá lạ trong file cấu hình
 
 
@@ -71,27 +76,32 @@ def _as_text(name, value):
 
 def load_config(config_path="config.json"):
     path = find_config_path(config_path)
-    raw = {}
-    if path.exists():
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                raw = json.load(fh)
-        except json.JSONDecodeError as exc:
-            raise ConfigError(f"{path.name} không phải JSON hợp lệ: {exc.msg} (dòng {exc.lineno}, cột {exc.colno})")
-        except OSError as exc:
-            raise ConfigError(f"Không đọc được {path}: {exc}")
-        if not isinstance(raw, dict):
-            raise ConfigError(f"{path.name} phải là một đối tượng JSON {{...}}")
+    if not path.exists():
+        raise ConfigError(f"Không tìm thấy tệp cấu hình: {path}")
 
-    data = dict(DEFAULTS)
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            raw = json.load(fh)
+    except json.JSONDecodeError as exc:
+        raise ConfigError(f"{path.name} không phải JSON hợp lệ: {exc.msg} (dòng {exc.lineno}, cột {exc.colno})")
+    except OSError as exc:
+        raise ConfigError(f"Không đọc được {path}: {exc}")
+
+    if not isinstance(raw, dict):
+        raise ConfigError(f"{path.name} phải là một đối tượng JSON {{...}}")
+
+    data = {}
     warnings = []
     for key, value in raw.items():
         key = ALIASES.get(key, key)
-        if key in DEFAULTS:
-            data[key] = value
-        elif key in SHARED_KEYS:
-            continue
-        else:
+        data[key] = value
+
+    missing = sorted(key for key in REQUIRED_KEYS if key not in data)
+    if missing:
+        raise ConfigError(f"Thiếu trường bắt buộc trong {path.name}: {', '.join(missing)}")
+
+    for key in sorted(data):
+        if key not in REQUIRED_KEYS and key not in SHARED_KEYS:
             warnings.append(f'Khoá không dùng trong {path.name}: "{key}"')
 
     base = path.resolve().parent
@@ -104,5 +114,8 @@ def load_config(config_path="config.json"):
         stop_password=_as_text("stop_password", data["stop_password"]),
         max_file_size_mb=_as_int("max_file_size_mb", data["max_file_size_mb"], 0),
         max_log_files=_as_int("max_log_files", data["max_log_files"], 0),
+        max_concurrent_uploads=_as_int("max_concurrent_uploads", data["max_concurrent_uploads"], 1),
+        chunk_size=_as_int("chunk_size", data["chunk_size"], 1),
+        timeout_seconds=_as_int("timeout_seconds", data["timeout_seconds"], 1),
         warnings=warnings,
     )
