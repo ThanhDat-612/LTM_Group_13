@@ -3,6 +3,8 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, ttk
 
+from tkinterdnd2 import DND_FILES
+
 from client.gui import styles
 from client.gui.drop_area import HINT, DropArea
 from client.gui.file_list_view import FileListView
@@ -10,11 +12,6 @@ from client.models import FileItem
 from client.network.connection import load_runtime_config
 from client.network.session import ClientSession
 from client.network.upload_manager import UploadManager
-
-try:
-    from tkinterdnd2 import DND_FILES
-except Exception:  # pragma: no cover
-    DND_FILES = None
 
 
 class FileTransferApp:
@@ -88,12 +85,8 @@ class FileTransferApp:
 
         self.root.bind("<Control-o>", lambda event: self.choose_files())
         self.root.bind("<Control-v>", self._paste)
-        if DND_FILES is not None:
-            try:
-                self.root.drop_target_register(DND_FILES)
-                self.root.dnd_bind('<<Drop>>', self._drop_root)
-            except Exception:
-                pass
+        self.root.drop_target_register(DND_FILES)
+        self.root.dnd_bind('<<Drop>>', self._drop_root)
 
     # ---------- Kết nối / ngắt kết nối ----------
     def _set_status(self, text, color=styles.MUTED):
