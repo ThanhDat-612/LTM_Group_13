@@ -182,23 +182,13 @@ class Server:
             log_note = f"Không tạo được tệp log ({exc}), nhật ký chỉ hiển thị trên giao diện"
 
         ensure_dir(self.upload_dir)
-
-        for stale in Path(self.upload_dir).glob(".*.part"):
-            try:
-                stale.unlink()
-            except OSError:
-                pass
-
-        self.accept_thread = threading.Thread(
-            target=self._accept_loop,
-            args=(sock,),
-            daemon=True
-        )
+        PartManager.cleanup_stale(self.upload_dir)
+        self.accept_thread = threading.Thread(target=self._accept_loop, args=(sock,), daemon=True)
         self.accept_thread.start()
 
         self.log(f"Server đã bắt đầu lắng nghe trên {self.host}:{self.port}")
         self.log(f"Thư mục lưu tệp: {self.upload_dir}")
-
+        self.log(f"Giới hạn kết nối đồng thời: {self.config.max_concurrent_uploads}")
         limit = f"{self.config.max_file_size_mb} MB" if self.max_file_size else "không giới hạn"
         self.log(f"Dung lượng tối đa mỗi tệp: {limit}")
 
