@@ -3,8 +3,6 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, ttk
 
-from tkinterdnd2 import DND_FILES
-
 from client.gui import styles
 from client.gui.drop_area import HINT, DropArea
 from client.gui.file_list_view import FileListView
@@ -85,8 +83,6 @@ class FileTransferApp:
 
         self.root.bind("<Control-o>", lambda event: self.choose_files())
         self.root.bind("<Control-v>", self._paste)
-        self.root.drop_target_register(DND_FILES)
-        self.root.dnd_bind('<<Drop>>', self._drop_root)
 
     # ---------- Kết nối / ngắt kết nối ----------
     def _set_status(self, text, color=styles.MUTED):
@@ -202,9 +198,6 @@ class FileTransferApp:
             self.handle_drop(self.root.clipboard_get())
         except tk.TclError:
             pass
-
-    def _drop_root(self, event):
-        self.handle_drop(event.data)
 
     def handle_drop(self, file_list):
         if not self.connected or self.manager is None:
