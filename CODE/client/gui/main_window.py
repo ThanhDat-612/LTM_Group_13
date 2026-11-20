@@ -11,11 +11,6 @@ from client.network.connection import load_runtime_config
 from client.network.session import ClientSession
 from client.network.upload_manager import UploadManager
 
-try:
-    from tkinterdnd2 import DND_FILES
-except Exception:  # pragma: no cover
-    DND_FILES = None
-
 
 class FileTransferApp:
     def __init__(self, root):
@@ -88,12 +83,6 @@ class FileTransferApp:
 
         self.root.bind("<Control-o>", lambda event: self.choose_files())
         self.root.bind("<Control-v>", self._paste)
-        if DND_FILES is not None:
-            try:
-                self.root.drop_target_register(DND_FILES)
-                self.root.dnd_bind('<<Drop>>', self._drop_root)
-            except Exception:
-                pass
 
     # ---------- Kết nối / ngắt kết nối ----------
     def _set_status(self, text, color=styles.MUTED):
@@ -209,9 +198,6 @@ class FileTransferApp:
             self.handle_drop(self.root.clipboard_get())
         except tk.TclError:
             pass
-
-    def _drop_root(self, event):
-        self.handle_drop(event.data)
 
     def handle_drop(self, file_list):
         if not self.connected or self.manager is None:

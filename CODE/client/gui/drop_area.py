@@ -1,13 +1,9 @@
 import logging
 import tkinter as tk
 
-from client.gui import styles
+from tkinterdnd2 import COPY, DND_FILES, REFUSE_DROP
 
-try:
-    from tkinterdnd2 import COPY, DND_FILES, REFUSE_DROP
-except ImportError:  # pragma: no cover
-    DND_FILES = None
-    COPY, REFUSE_DROP = "copy", "refuse_drop"
+from client.gui import styles
 
 logger = logging.getLogger(__name__)
 
@@ -27,15 +23,11 @@ class DropArea(tk.Canvas):
         self.bind("<Enter>", lambda e: self._set_hover(True))
         self.bind("<Leave>", lambda e: self._set_hover(False))
 
-        if DND_FILES is not None:
-            try:
-                self.drop_target_register(DND_FILES)
-                self.dnd_bind("<<Drop>>", self._drop_files)
-                self.dnd_bind("<<DropEnter>>", self._drag_over)
-                self.dnd_bind("<<DropPosition>>", self._drag_over)
-                self.dnd_bind("<<DropLeave>>", lambda e: self._set_hover(False))
-            except (tk.TclError, AttributeError):
-                logger.exception("Không thể bật kéo thả. Cửa sổ gốc cần dùng TkinterDnD.Tk().")
+        self.drop_target_register(DND_FILES)
+        self.dnd_bind("<<Drop>>", self._drop_files)
+        self.dnd_bind("<<DropEnter>>", self._drag_over)
+        self.dnd_bind("<<DropPosition>>", self._drag_over)
+        self.dnd_bind("<<DropLeave>>", lambda e: self._set_hover(False))
 
     def _drag_over(self, event):
         if not self.callback:
