@@ -137,25 +137,46 @@ class Server:
                 raise OSError(f"Không tìm được tên tệp khả dụng: {exc}") from exc
 
     # ---------- Bật / tắt ----------
+    
     def start(self):
         with self.lock:
             if self.is_running:
                 return True
+
+            sock = None
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+                # Windows: yêu cầu sử dụng cổng độc quyền
+                if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                    sock.setsockopt(
+                        socket.SOL_SOCKET,
+                        socket.SO_EXCLUSIVEADDRUSE,
+                        1
+                    )
+
                 sock.bind((self.host, self.port))
                 sock.listen(20)
-                sock.settimeout(1.0)   # để vòng accept kiểm tra cờ dừng định kỳ
+                sock.settimeout(1.0)
+
             except OSError as exc:
+                if sock is not None:
+                    try:
+                        sock.close()
+                    except OSError:
+                        pass
+
                 self.log(f"Không thể khởi động server: {exc}")
                 return False
+
             self.server_socket = sock
             self.is_running = True
 
-        # Mỗi lần bật server là một tệp log mới, ghi tới khi tắt server
+        # Mỗi lần bật server là một tệp log mới
         try:
-            self.file_logger.start(header=f"=== Phiên server bắt đầu lúc {datetime.now():%Y-%m-%d %H:%M:%S} ===")
+            self.file_logger.start(
+                header=f"=== Phiên server bắt đầu lúc {datetime.now():%Y-%m-%d %H:%M:%S} ==="
+            )
             log_note = f"Tệp log phiên này: {self.file_logger.path}"
         except OSError as exc:
             log_note = f"Không tạo được tệp log ({exc}), nhật ký chỉ hiển thị trên giao diện"
@@ -164,15 +185,19 @@ class Server:
         PartManager.cleanup_stale(self.upload_dir)
         self.accept_thread = threading.Thread(target=self._accept_loop, args=(sock,), daemon=True)
         self.accept_thread.start()
+
         self.log(f"Server đã bắt đầu lắng nghe trên {self.host}:{self.port}")
         self.log(f"Thư mục lưu tệp: {self.upload_dir}")
         self.log(f"Giới hạn kết nối đồng thời: {self.config.max_concurrent_uploads}")
         limit = f"{self.config.max_file_size_mb} MB" if self.max_file_size else "không giới hạn"
         self.log(f"Dung lượng tối đa mỗi tệp: {limit}")
+
         for warning in self.config.warnings:
             self.log(f"Cảnh báo cấu hình: {warning}")
+
         self.log(log_note)
         return True
+
 
     def _accept_loop(self, sock):
         while self.is_running and sock is self.server_socket:
