@@ -6,13 +6,25 @@ from server.gui import styles
 
 MAX_LINES = 500
 
-
+LOG_COLORS = {
+    "cancel": "#b45309",   # cam đậm
+    "error":  "#b91c1c",   # đỏ đậm
+    "done":   "#15803d",   # xanh lá đậm
+    "active": "#1d4ed8",   # xanh dương đậm
+    "wait":   "#475569",   # xám đậm
+}
 class LogView(ttk.Frame):
     def __init__(self, master=None, **kwargs):
         super().__init__(master, style="Plain.TFrame", **kwargs)
+        # self.text = tk.Text(self, height=10, state="disabled", wrap="word", font=styles.F_MONO,
+        #                     bg=styles.CARD, fg=styles.TEXT, relief="flat", borderwidth=0,
+        #                     padx=6, pady=4, highlightthickness=0)\
         self.text = tk.Text(self, height=10, state="disabled", wrap="word", font=styles.F_MONO,
-                            bg=styles.CARD, fg=styles.TEXT, relief="flat", borderwidth=0,
-                            padx=6, pady=4, highlightthickness=0)
+                    bg="#ffffff", fg=styles.TEXT, relief="flat", borderwidth=0,
+                    padx=6, pady=4, highlightthickness=0,
+                    selectbackground="#fde68a",           # màu bôi chọn: vàng nhạt
+                    inactiveselectbackground="#fef3c7")   # khi cửa sổ log mất focus
+        
         scroll = ttk.Scrollbar(self, orient="vertical", command=self.text.yview)
         self.text.configure(yscrollcommand=scroll.set)
         self.text.pack(side="left", fill="both", expand=True)
@@ -20,7 +32,7 @@ class LogView(ttk.Frame):
 
         for group, color in styles.GROUP_COLOR.items():
             self.text.tag_configure(group, foreground=color)
-        self.text.tag_configure("wait", foreground=styles.TEXT)
+        self.text.tag_configure("wait", foreground=LOG_COLORS["wait"])
 
         self._pending = queue.Queue()   # cho phép append() từ thread khác một cách an toàn
         self._shown = 0                 # số dòng của server.logs đã hiển thị (chế độ không có total)

@@ -3,6 +3,7 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from common.utils import ensure_dir, timestamp_label
 from server.config_loader import load_config
@@ -34,6 +35,8 @@ class Server:
         self.lock = threading.RLock()
         self.connections = {}        # mọi socket đang mở -> địa chỉ (để tắt server có thể ngắt hết)
         self.connected_clients = {}  # chỉ các phiên HELLO: những client đang thật sự "kết nối"
+        self.session_addresses = {}  # session_id -> "ip:port" của kết nối điều khiển
+        self.socket_sessions = {}    # socket điều khiển -> session_id
         self.active_uploads = {}
         self.logs = []
         self.log_total = 0           # tổng số dòng log đã ghi (giao diện dùng để biết dòng nào mới)
@@ -93,13 +96,40 @@ class Server:
                 self.connected_clients[client_socket]["status"] = status
 
     def register_session(self, client_socket):
-        """Client gửi HELLO: tính là một client đang kết nối (khác với các kết nối ngắn chỉ để gửi tệp)."""
+        """Tạo session_id cho kết nối HELLO và ghi lại địa chỉ điều khiển của client."""
         with self.lock:
+            socket_sessions = getattr(self, "socket_sessions", None)
+            session_addresses = getattr(self, "session_addresses", None)
+            if socket_sessions is None:
+                socket_sessions = self.socket_sessions = {}
+            if session_addresses is None:
+                session_addresses = self.session_addresses = {}
+            existing = socket_sessions.get(client_socket)
+            if existing:
+                return existing
             addr = self.connections.get(client_socket)
-            if addr is None or client_socket in self.connected_clients:
-                return
+            if addr is None:
+                return None
+            session_id = uuid4().hex
+            socket_sessions[client_socket] = session_id
+            session_addresses[session_id] = addr
             self.connected_clients[client_socket] = {"address": addr, "status": "đã kết nối"}
         self.log(f"Client {addr} đã kết nối")
+        return session_id
+
+    def resolve_session_address(self, session_id):
+        if not isinstance(session_id, str):
+            return None
+        with self.lock:
+            return getattr(self, "session_addresses", {}).get(session_id)
+
+    def unregister_session(self, client_socket):
+        with self.lock:
+            socket_sessions = getattr(self, "socket_sessions", {})
+            session_addresses = getattr(self, "session_addresses", {})
+            session_id = socket_sessions.pop(client_socket, None)
+            if session_id:
+                session_addresses.pop(session_id, None)
 
     # ---------- Quản lý upload ----------
     def update_upload(self, client_label, file_name, status, progress, speed):
@@ -222,6 +252,7 @@ class Server:
         except Exception as exc:
             self.log(f"Lỗi xử lý kết nối {addr}: {exc}")
         finally:
+            self.unregister_session(client_socket)
             with self.lock:
                 self.connections.pop(client_socket, None)
                 was_session = self.connected_clients.pop(client_socket, None) is not None

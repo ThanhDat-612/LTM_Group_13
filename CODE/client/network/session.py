@@ -21,6 +21,7 @@ class ClientSession(threading.Thread):
         self._sock = None
         config = load_runtime_config()
         self.timeout = int(config.get("timeout_seconds", 30))
+        self.session_id = None
 
     def _ping(self):
         start = time.monotonic()
@@ -39,8 +40,13 @@ class ClientSession(threading.Thread):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             self._sock = sock
             send_json(sock, {"type": "HELLO"})
-            if recv_json(sock).get("type") != "WELCOME":
+            welcome = recv_json(sock)
+            if welcome.get("type") != "WELCOME":
                 raise OSError("Server không phản hồi đúng giao thức")
+            session_id = welcome.get("session_id")
+            if not isinstance(session_id, str) or not session_id:
+                raise OSError("Server không trả session_id hợp lệ")
+            self.session_id = session_id
             ping_ms = self._ping()
         except Exception:
             self._sock = None

@@ -154,6 +154,7 @@ class FileTransferApp:
                 port,
                 self._on_upload_update,
                 max_concurrent=int(self.runtime_config.get("max_concurrent_uploads", 3)),
+                session_id=session.session_id,
             )
             self.host.set(host)
             self.port.set(str(port))
