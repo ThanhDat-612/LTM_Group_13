@@ -26,7 +26,7 @@ class UploadRemoteClosed(Exception):
 
 
 class UploadWorker(threading.Thread):
-    def __init__(self, file_path, host, port, callback, queue_controller):
+    def __init__(self, file_path, host, port, callback, queue_controller, session_id=None):
         super().__init__(daemon=True)
         self.key = str(file_path)             # khóa ổn định để đồng bộ với hàng đợi và giao diện
         self.file_path = Path(file_path)
@@ -34,6 +34,7 @@ class UploadWorker(threading.Thread):
         self.port = port
         self.callback = callback
         self.queue_controller = queue_controller
+        self.session_id = session_id
         self._stop_event = threading.Event()
         self._sock = None
         self._retried = False
@@ -92,11 +93,14 @@ class UploadWorker(threading.Thread):
                 self._check_cancel()
                 sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-                send_json(sock, {
+                request = {
                     "type": "UPLOAD_REQUEST",
                     "filename": self.file_path.name,
                     "size": total,
-                })
+                }
+                if self.session_id:
+                    request["session_id"] = self.session_id
+                send_json(sock, request)
                 ack = recv_json(sock)
                 if not ack:
                     raise RuntimeError("Server không phản hồi hợp lệ")

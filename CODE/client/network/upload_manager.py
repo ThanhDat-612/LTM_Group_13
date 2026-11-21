@@ -7,11 +7,12 @@ from client.network.upload_worker import CANCELLED_STATUS, UploadWorker
 
 
 class UploadManager:
-    def __init__(self, host, port, callback, max_concurrent=None):
+    def __init__(self, host, port, callback, max_concurrent=None, session_id=None):
         runtime = load_runtime_config()
         self.host = host
         self.port = port
         self.callback = callback
+        self.session_id = session_id
         self.max_concurrent = int(max_concurrent if max_concurrent is not None else runtime.get("max_concurrent_uploads", 3))
         self.queue = UploadQueue(max_concurrent=self.max_concurrent)
         self.lock = threading.Lock()
@@ -38,7 +39,7 @@ class UploadManager:
             if not batch:
                 break
             for file_path in batch:
-                worker = UploadWorker(file_path, self.host, self.port, self.callback, self)
+                worker = UploadWorker(file_path, self.host, self.port, self.callback, self, self.session_id)
                 with self.lock:
                     self.workers[file_path] = worker
                     cancel_now = file_path in self._cancel_requested

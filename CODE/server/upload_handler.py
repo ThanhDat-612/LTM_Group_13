@@ -58,8 +58,8 @@ class UploadHandler:
                     self._safe_send({"type": "UPLOAD_ERROR", "message": "Đã đạt giới hạn kết nối client đồng thời"})
                     self.server.log(f"Client {self.label} bị từ chối: đã đạt giới hạn {self.server.config.max_concurrent_uploads} kết nối đồng thời")
                     return
-                self.server.register_session(self.client_socket)
-                self._safe_send({"type": "WELCOME", "status": "ok"})
+                session_id = self.server.register_session(self.client_socket)
+                self._safe_send({"type": "WELCOME", "status": "ok", "session_id": session_id})
                 continue
             if message_type == "PING":
                 self._safe_send({"type": "PONG", "status": "ok"})
@@ -99,6 +99,9 @@ class UploadHandler:
 
     # ---------- Nhận một tệp ----------
     def _handle_upload_request(self, message):
+        session_address = self.server.resolve_session_address(message.get("session_id"))
+        if session_address:
+            self.label = session_address
         filename = message.get("filename", "")
         try:
             expected_size = int(message.get("size"))
