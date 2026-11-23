@@ -192,11 +192,11 @@ Kết quả, cấu hình máy, dữ liệu đầu vào và bằng chứng nằm 
  
 | STT | Họ tên | MSSV | Vai trò | Công việc |
 |---|---|---|---|---|
-| 1 | Trương Thành Đạt | 079206016971 | Leader, Server core | Kiến trúc, protocol, tích hợp, README |
-| 2 | Trần Nguyễn Du | 080206009191 | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình |
-| 3 | Sử Quốc Duy | 056206005633 | Client network | Hàng đợi, đồng thời, tốc độ, timeout |
-| 4 | Trần Minh Tuyển | 056206005060 | Client GUI | Kéo thả, trạng thái, tiến trình |
-| 5 | Huỳnh Khánh Vân | 072305001573 | QA, demo, slide | Kiểm thử, video, PPTX |
+| 1 | Trương Thành Đạt | 079206016971 | Leader, Server core | Kiến trúc, protocol, tích hợp, README, video |
+| 2 | Trần Nguyễn Du | 080206009191 | Server validation, log, bảo mật | Kiểm tra dữ liệu, log, cấu hình, kiểm thử |
+| 3 | Sử Quốc Duy | 056206005633 | Client network | Hàng đợi, đồng thời, tốc độ, timeout, kiểm thử |
+| 4 | Trần Minh Tuyển | 056206005060 | Client GUI | Kéo thả, trạng thái, tiến trình, kiểm thử |
+| 5 | Huỳnh Khánh Vân | 072305001573 | QA, slide | Kiểm thử, PPTX |
  
 ## 10. Tài liệu
  
@@ -205,3 +205,5 @@ Document: https://docs.google.com/document/d/11_C4RPUITftiI3TEqs5c_iWzwgcEilVlQY
 Tiến độ: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?usp=sharing
  
 Testcase: https://docs.google.com/spreadsheets/d/1jIcIgjqGRsm7Z1z2i3sGU1-zjAeogrVH31qA5NgZrDM/edit?gid=603698804#gid=603698804
+
+Slide: https://canva.link/f1dk0nu8qskrvqp
