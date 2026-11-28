@@ -1,7 +1,14 @@
 import json
+import socket
 import threading
 from pathlib import Path
 from unittest import mock
+
+import pytest
+
+from common.protocol import pack_json, recv_exact, recv_json, send_chunk, send_json
+from server.duplicate_policy import resolve_duplicate_name
+from server.validator import validate_filename
 
 from client.models import FileItem, FileStatus
 from client.network.connection import load_runtime_config
@@ -103,3 +110,72 @@ def test_server_limiter_applies_to_client_sessions_not_every_upload_socket():
         server._accept_loop(server.server_socket)
 
     server.connection_limiter.acquire.assert_not_called()
+
+
+@pytest.mark.parametrize("name", [
+    "",
+    ".",
+    "..",
+    "folder/file.txt",
+    "folder\\file.txt",
+    " file.txt",
+    "file.txt ",
+    ".hidden.txt",
+    "file.txt.part",
+    "bad<name.txt",
+    "CON.txt",
+])
+def test_validate_filename_rejects_invalid_names(name):
+    with pytest.raises(ValueError):
+        validate_filename(name)
+
+
+def test_validate_filename_accepts_regular_name():
+    assert validate_filename("baocao-2026.txt") == "baocao-2026.txt"
+
+
+def test_duplicate_name_keeps_original_when_available(tmp_path):
+    assert resolve_duplicate_name("report.txt", tmp_path) == "report.txt"
+
+
+def test_duplicate_name_creates_timestamped_name(tmp_path):
+    (tmp_path / "report.txt").write_bytes(b"existing")
+
+    fixed_now = mock.Mock()
+    fixed_now.strftime.return_value = "28112026_120000"
+    with mock.patch("server.duplicate_policy.datetime") as mock_datetime:
+        mock_datetime.now.return_value = fixed_now
+        name = resolve_duplicate_name("report.txt", tmp_path)
+
+    assert name == "report_28112026_120000.txt"
+
+
+def test_protocol_json_and_raw_chunk_roundtrip():
+    left, right = socket.socketpair()
+    try:
+        payload = {"type": "UPLOAD_ACK", "status": "ok", "name": "báo cáo.txt"}
+        send_json(left, payload)
+        assert recv_json(right) == payload
+
+        send_chunk(left, b"abc123")
+        length = recv_exact(right, 4)
+        assert int.from_bytes(length, "big") == 6
+        assert recv_exact(right, 6) == b"abc123"
+    finally:
+        left.close()
+        right.close()
+
+
+def test_upload_queue_limits_concurrency_and_removes_pending():
+    queue = UploadQueue(max_concurrent=2)
+    queue.enqueue("a.txt")
+    queue.enqueue("b.txt")
+    queue.enqueue("c.txt")
+
+    assert queue.next_batch() == ["a.txt", "b.txt"]
+    assert queue.next_batch() == []
+    assert queue.remove("c.txt") is True
+    assert queue.clear_pending() == []
+
+    queue.mark_done("a.txt")
+    assert "a.txt" not in queue.active
